@@ -1,14 +1,11 @@
 clc
 clear
 close all
-testMap = map(5, 5);
+map = map(5, 5);
 
-asset1 = asset([2.5,2.5]);
+asset1 = asset([2.5,2.5]); % Define asset (location)
 
-testUAS = UAS(1, [0,2], asset1.location);
+UAS1 = UAS(1, [5,5], asset1.location); % Define UAS (speed, entrance, target)
 
-testMap.pullUAS(testUAS) % Select UAS as "active"
-testMap.displayMap % Display the UAS map
-
-sim = simulator(testMap, testUAS, asset1, 0.1);
-sim.runSim(0.1)
+sim = simulator(map, UAS1, asset1, 0.05, 1); % Define simulator (map, UASs, Assets, Dt, Animate T/F)
+s = sim.runSim() % Runsim
