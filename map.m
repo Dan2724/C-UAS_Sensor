@@ -13,7 +13,7 @@ classdef map < handle
         end
         function displayMap(obj)
             if ~isempty(obj.UAS)
-                plot(0,obj.UAS.enterance,'Marker','square')
+                plot(0,obj.UAS.entrance,'Marker','square')
             end
             xlim([0,obj.size.horiz])
             ylim([0,obj.size.vert])
@@ -30,6 +30,7 @@ classdef map < handle
             % xPos0 = obj.UAS.enterance;
             % yPos0 = obj.UAS.enterance;
             enterAngle = obj.UAS.entrance;
+            
             if enterAngle == 0
                 xPos0 = 0;
                 yPos0 = obj.size.vert;
