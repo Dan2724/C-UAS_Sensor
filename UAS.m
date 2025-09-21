@@ -1,14 +1,14 @@
 classdef UAS < handle
     properties
         speed
-        enterance
+        entrance
         heading
         
     end
     methods
-        function obj = UAS(speed, enterance, heading)
+        function obj = UAS(speed, entrance, heading)
             obj.speed = speed;
-            obj.enterance = enterance;
+            obj.entrance = entrance;
             obj.heading = heading;
         end
     end

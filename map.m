@@ -29,7 +29,7 @@ classdef map < handle
         function runSim(obj,interval)
             % xPos0 = obj.UAS.enterance;
             % yPos0 = obj.UAS.enterance;
-            enterAngle = obj.UAS.enterance;
+            enterAngle = obj.UAS.entrance;
             if enterAngle == 0
                 xPos0 = 0;
                 yPos0 = obj.size.vert;
