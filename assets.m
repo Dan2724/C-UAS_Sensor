@@ -7,4 +7,6 @@ classdef assets < handle
         function obj = assets(location1)
             obj.A1 = [location1(1), location1(2)];
         end
+    end
+end
         
