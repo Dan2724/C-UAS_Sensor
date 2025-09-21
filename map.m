@@ -18,43 +18,18 @@ classdef map < handle
             xlim([0,obj.size.horiz])
             ylim([0,obj.size.vert])
 
-
-            % xline(0)
-            % yline(0)
         end
         function pullUAS(obj,inputUAS)
             obj.UAS = inputUAS;
 
         end
         function runSim(obj,interval)
-            % xPos0 = obj.UAS.enterance;
-            % yPos0 = obj.UAS.enterance;
-            enterAngle = obj.UAS.entrance;
-            
-            if enterAngle == 0
-                xPos0 = 0;
-                yPos0 = obj.size.vert;
-
-            elseif enterAngle > 0 && enterAngle < 45
-                xPos0 = sind(enterAngle)*obj.size.horiz;
-                yPos0 = obj.size.vert;
-
-            elseif enterAngle == 45
-                yPos0 = obj.size.vert;
-                xPos0 = -obj.size.horiz;
-
-            elseif enterAngle > 45 && enterAngle < 90
-                xPos0 = obj.size.horiz;
-                yPos0 = cosd(enterAngle)*obj.size.vert;
-
-            elseif enterAngle == 90
-                xPos0 = -obj.size.horiz;
-                yPos0 = 0;
-
-            end
+            xPos0 = obj.UAS.entrance(1);
+            yPos0 = obj.UAS.entrance(2);
 
             xPos = xPos0;
             yPos = yPos0;
+            targetUnitVector = (obj.UAS.target - obj.UAS.entrance) / norm(obj.UAS.target - obj.UAS.entrance);
             time = 0;
 
             while xPos < obj.size.horiz && yPos < obj.size.vert
@@ -63,12 +38,12 @@ classdef map < handle
                 yline(0,'k')
                 xlim([0,obj.size.horiz])
                 ylim([0,obj.size.vert])
-                xPos = xPos0 + obj.UAS.speed*time*cosd(obj.UAS.heading);
-                yPos = yPos0 + obj.UAS.speed*time*sind(obj.UAS.heading);
+                xPos = xPos0 + obj.UAS.speed*time*targetUnitVector(1);
+                yPos = yPos0 + obj.UAS.speed*time*targetUnitVector(2);
                 plot(xPos,yPos,'Marker','square','Color','r')
-                if xPos == obj.size.horiz
-                    break
-                elseif yPos == obj.size.vert
+                dxPos = abs(obj.UAS.target(1) - xPos);
+                dyPos = abs(obj.UAS.target(2) - yPos);
+                if dxPos <= obj.UAS.speed && dyPos <= obj.UAS.speed;
                     break
                 end
                 time = time + interval;
