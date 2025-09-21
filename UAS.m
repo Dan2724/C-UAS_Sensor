@@ -1,14 +1,16 @@
 classdef UAS < handle
     properties
         speed
-        entrance
+        enterance
         heading
         
     end
     methods
-        function obj = UAS(speed, entrance, heading)
+
+        % All this does is stores the set parameters in the UAS properties
+        function obj = UAS(speed, enterance, heading)
             obj.speed = speed;
-            obj.entrance = entrance;
+            obj.enterance = enterance;
             obj.heading = heading;
         end
     end
