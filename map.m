@@ -2,6 +2,7 @@ classdef map < handle
     properties
         size
         UAS
+        numAsset
 
     end
     methods
@@ -10,7 +11,7 @@ classdef map < handle
             % integrate this yet
             obj.size.vert = size;
             obj.size.horiz = size;
-
+        
 
         end
         function displayMap(obj)
