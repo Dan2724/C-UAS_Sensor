@@ -97,14 +97,12 @@ classdef simulator
 
 
             while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
-                % This while loop is a tad clunky and not necessary
 
-                % Linear movement (Should be moved to separate function
-                % based on UAV mode)
-                xPos = xPos0 + obj.UAS.speed*obj.time*targetUnitVector(1);
-                yPos = yPos0 + obj.UAS.speed*obj.time*targetUnitVector(2);
-                dxPos = abs(xtarget - xPos);
-                dyPos = abs(ytarget - yPos);
+                if obj.UAS.mode == 'Linear'
+                    obj.UAS.linearMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector);
+                end
+                xPos = obj.UAS.xPos;
+                yPos = obj.UAS.yPos;
                 
                 % Determine state based on object collision
                 pos = [xPos, yPos];

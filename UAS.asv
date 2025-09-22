@@ -1,0 +1,23 @@
+classdef UAS < handle
+    properties
+        speed
+        entrance
+        target
+        mode
+    end
+    methods
+        function obj = UAS(speed, entrance, target, mode)
+            obj.speed = speed;
+            obj.entrance = entrance;
+            obj.target = target;
+            obj.mode = mode;
+        end
+
+        function obj.LinearMotion(obj.xPos,yPos,dxPos)
+            xPos = xPos0 + obj.UAS.speed*obj.time*targetUnitVector(1);
+            yPos = yPos0 + obj.UAS.speed*obj.time*targetUnitVector(2);
+            dxPos = abs(xtarget - xPos);
+            dyPos = abs(ytarget - yPos);
+        end
+    end
+end
