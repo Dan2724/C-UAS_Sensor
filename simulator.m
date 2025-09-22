@@ -102,8 +102,8 @@ classdef simulator
                     obj.UAS.linearMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector);
                 elseif obj.UAS.mode == 'Search'
                     obj.UAS.searchMotion(xPos, yPos, xtarget, ytarget, obj.time);
-
                 end
+                
                 xPos = obj.UAS.position.xPos;
                 yPos = obj.UAS.position.yPos;
                 
