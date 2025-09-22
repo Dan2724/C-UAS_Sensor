@@ -1,41 +1,34 @@
-function entrances = ingressPosns(N, L)
-    % ingressPosns: Generate N evenly spaced entrance points
-    % around the perimeter of an L x L square map
-    %
-    % Inputs:
-    %   N - number of entrance points
-    %   L - side length of the square map
+% Generates N evenly spaced entrances around L x L map perimeter
+
+    % Input:
+        % N - number of entrance points
+        % L - side length of the square map
     % Output:
-    %   entrances - N x 2 matrix of [x, y] entrance coordinates
+        % entrances - N x 2 matrix of [x, y] entrance coordinates
 
-    % Total perimeter
-    P = 4*L;
+function entrances = ingressPosns(N, L)
 
-    % Evenly spaced distances along the perimeter
-    s = linspace(0, P, N+1).';  
-    s(end) = [];   % drop duplicate endpoint
+    P = 4*L;                              % total perimeter
 
-    % Preallocate
-    x = zeros(N,1);
+    s = linspace(0, P, N+1).';            % evenly spaced distances along the perimeter
+    s(end) = [];                          % drop duplicate endpoint
+
+    x = zeros(N,1);                       % preallocate
     y = zeros(N,1);
 
-    % Bottom edge (0 ≤ s < L)
-    idx = s < L;
+    idx = s < L;                          % bottom edge (0 ≤ s < L
     x(idx) = s(idx);
     y(idx) = 0;
-
-    % Right edge (L ≤ s < 2L)
-    idx = (s >= L) & (s < 2*L);
+       
+    idx = (s >= L) & (s < 2*L);           % right edge (L ≤ s < 2L)
     x(idx) = L;
     y(idx) = s(idx) - L;
 
-    % Top edge (2L ≤ s < 3L)
-    idx = (s >= 2*L) & (s < 3*L);
+    idx = (s >= 2*L) & (s < 3*L);         % top edge (2L ≤ s < 3L)
     x(idx) = L - (s(idx) - 2*L);
     y(idx) = L;
 
-    % Left edge (3L ≤ s < 4L)
-    idx = (s >= 3*L);
+    idx = (s >= 3*L);                     % left edge (3L ≤ s < 4L)
     x(idx) = 0;
     y(idx) = L - (s(idx) - 3*L);
 
