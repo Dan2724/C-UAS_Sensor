@@ -41,109 +41,59 @@ classdef simulator
 
         function result = runSim(obj)
             result = 0;
+            eventExitBounds = 0;
+            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
+            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
 
-            xPos0 = obj.UAS.entrance(1);
-            yPos0 = obj.UAS.entrance(2);
-
-            xtarget = obj.UAS.target(1);
-            ytarget = obj.UAS.target(2);
-
-            xPos = xPos0;
-            yPos = yPos0;
-            targetUnitVector = (obj.UAS.target - obj.UAS.entrance) / norm(obj.UAS.target - obj.UAS.entrance);
+            targetUnitVector = (UASTarget - UASPos(1,:)) / norm(UASTarget - UASPos(1,:));
 
             if obj.animate == true
-                obj.map.displayMap
-
-                % Plot AOR
-                plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05)
-
-                % Plot assets
-                for i = 1:length(obj.assets)
-                    plot(obj.assets(i).location(1), obj.assets(i).location(2), 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10, 'LineWidth', 5)
-                end
-
-                % Plot NFZs
-                if isempty(obj.NFZs) == 0
-                    for i = 1:length(obj.NFZs)
-                        plot(obj.NFZs(i), 'FaceColor', 'm', 'FaceAlpha', 0.2)
-                    end
-                end
-                    
-                % Plot sensors
-                for i = 1:length(obj.sensors)
-                    x = obj.sensors(i).location(1);
-                    y = obj.sensors(i).location(2);
-                    r = obj.sensors(i).range;
-
-                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
-                        'Curvature', [1 1], ...
-                        'FaceColor', 'b', ...
-                        'EdgeColor', 'b', ...
-                        'FaceAlpha', 0.05)
-                    plot(x, y, 'o', 'Color', 'b')
-                end
-
-                %
-                xlim([0,obj.map.size.horiz])
-                ylim([0,obj.map.size.vert])
-
-                % Set up animation
+                obj.startAnimation(obj);
                 UAVTrail = plot(NaN, NaN, 'Color', 'r');
                 UAVHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
-                UAVx = []; UAVy = [];
             end
-
             
-
-            while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
+            while eventExitBounds == 0
                 if obj.UAS.mode == 'Linear'
-                    obj.UAS.linearMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector);
+                    obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector,obj.assets);
+                    obj.UAS.searchMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector,obj.assets);
+                end
 
-                end
-                xPos = obj.UAS.position.xPos;
-                yPos = obj.UAS.position.yPos;
-                
+                UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
+
                 % Determine state based on object collision
-                pos = [xPos, yPos];
-                [eventSensor] = obj.checkSensorCollision(pos);
-                [eventAsset,  asset] = obj.checkAssetCollision(xPos, yPos, obj.UAS.speed*obj.dt);
-                [eventNFZ] = obj.checkNFZCollision(xPos, yPos);
-                
-                if obj.animate
-                    UAVx(end+1) = xPos;
-                    UAVy(end+1) = yPos;
-                end
+                [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
+                [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
+                [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
+                [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
                 if eventSensor == 1 % UAV sensed
                     if obj.animate
-                        obj.animateUAVDestroyed([xPos, yPos])
-                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                        obj.animateUAVDestroyed(UASPos(end, :))
+                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
                     end
                     result = 1;
                     break
                 elseif eventAsset == 1 % Asset attacked
+                    UASPos = cat(1, UASPos, UASTarget);
                     if obj.animate
-                        obj.animateAssetDestroyed([obj.assets(asset).location(1), obj.assets(asset).location(2)])
-                        UAVx(end+1) = xtarget;
-                        UAVy(end+1) = ytarget;
-                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                        obj.animateAssetDestroyed([obj.assets(asset).location(1), obj.assets(asset).location(2)]);
+                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
                     end
                     result = 0;
                     break
                 elseif eventNFZ == 1 % UAV entered NFZ
                     if obj.animate
-                        obj.animateUAVDestroyed([xPos, yPos])
-                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                        obj.animateUAVDestroyed(UASPos(end, :))
+                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
                     end
                     result = 1;
                     break
                 else % UAV safe
                     if obj.animate
                         pause(obj.dt)
-                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
                     end
                 end
 
@@ -172,11 +122,11 @@ classdef simulator
             end
         end
 
-        function [event, asset] = checkAssetCollision(obj, xPos, yPos, speed)
+        function [event, asset] = checkAssetCollision(obj, pos, deltaPos)
             % Asset collision
             for i = 1:length(obj.assets)
-                deltaAsset = norm(obj.assets(i).location - [xPos, yPos]);
-                if deltaAsset <= speed
+                deltaAssetPos = norm(obj.assets(i).location - [pos(1), pos(2)]);
+                if deltaAssetPos <= deltaPos
                     event = 1;
                     asset = i;
                     return
@@ -186,12 +136,12 @@ classdef simulator
             end
         end
 
-        function [event, NFZ] = checkNFZCollision(obj, xPos, yPos)
+        function [event, NFZ] = checkNFZCollision(obj, pos)
             % NFZ collision
             event = 0; NFZ = 0;
             if isempty(obj.NFZs) == 0
                 for i = 1:length(obj.NFZs)
-                    if isinterior(obj.NFZs(i), xPos, yPos) == 1
+                    if isinterior(obj.NFZs(i), pos(1), pos(2)) == 1
                         event = 1;
                         NFZ = i;
                         return
@@ -199,16 +149,67 @@ classdef simulator
                 end
             end
         end
+
+        function [event] = checkOutOfBounds(~, pos, size)
+            if pos(1) < 0 || pos(1) > size.vert
+                event = 1;
+            elseif pos(2) < 0 || pos(2) > size.horiz
+                event = 1;
+            else
+                event = 0;
+            end
+        end
     end
 
     methods(Static)
+        % Initialize animation
+        function startAnimation(obj)
+            obj.map.displayMap
+
+            % Plot AOR
+            plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05)
+
+            % Plot assets
+            for i = 1:length(obj.assets)
+                plot(obj.assets(i).location(1), obj.assets(i).location(2), 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10, 'LineWidth', 5)
+            end
+
+            % Plot NFZs
+            if isempty(obj.NFZs) == 0
+                for i = 1:length(obj.NFZs)
+                    plot(obj.NFZs(i), 'FaceColor', 'm', 'FaceAlpha', 0.2)
+                end
+            end
+
+            % Plot sensors
+            for i = 1:length(obj.sensors)
+                x = obj.sensors(i).location(1);
+                y = obj.sensors(i).location(2);
+                r = obj.sensors(i).range;
+
+                rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
+                    'Curvature', [1 1], ...
+                    'FaceColor', 'b', ...
+                    'EdgeColor', 'b', ...
+                    'FaceAlpha', 0.05)
+                plot(x, y, 'o', 'Color', 'b')
+            end
+
+            %
+            xlim([0,obj.map.size.horiz])
+            ylim([0,obj.map.size.vert])
+
+            % Set up animation
+            
+        end
+
         % Main animation update (rename to updateUAVAnimation?)
-        function updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
-            set(UAVTrail, 'XData', UAVx, 'YData', UAVy)
-            set(UAVHead, 'XData', UAVx(end), 'YData', UAVy(end))
+        function updateAnimation(UAVTrail, UAVHead, UASPos)
+            set(UAVTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
+            set(UAVHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
             drawnow;
         end
-        
+
         function animateAssetDestroyed(target)
             plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 12)
             drawnow;
