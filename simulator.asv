@@ -109,7 +109,7 @@ classdef simulator
                 % Determine state based on object collision
                 pos = [xPos, yPos];
                 [eventSensor] = obj.checkSensorCollision(pos);
-                [eventAsset,  asset] = obj.checkAssetCollision(xPos, yPos, obj.UAS.speed*obj.dt);
+                [eventAsset,  asset] = obj.checkAssetCollision(xPos, yPos, );
                 [eventNFZ] = obj.checkNFZCollision(xPos, yPos);
                 
                 if obj.animate
@@ -172,11 +172,11 @@ classdef simulator
             end
         end
 
-        function [event, asset] = checkAssetCollision(obj, xPos, yPos, speed)
+        function [event, asset] = checkAssetCollision(obj, xPos, yPos, deltaPos)
             % Asset collision
             for i = 1:length(obj.assets)
                 deltaAsset = norm(obj.assets(i).location - [xPos, yPos]);
-                if deltaAsset <= speed
+                if deltaPos <= deltaAsset
                     event = 1;
                     asset = i;
                     return
