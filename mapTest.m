@@ -20,8 +20,8 @@ s = sim.runSim() % Runsim
 
 
 %{
-for x = 20:10:80
-    for y = 20:10:80
+for x = 20:5:80
+    for y = 20:5:80
         s = 0;
         for k = 1:100
             sensor1 = sensor([x, y], 15);
@@ -30,7 +30,7 @@ for x = 20:10:80
             s = sim.runSim() + s; % Run the simulation
         end
         % Store the results for each (x, y) position
-        results(x/10 - 1, y/10 - 1) = s;
+        results(x/5 - 1, y/5 - 1) = s;
     end
 end
 %}
