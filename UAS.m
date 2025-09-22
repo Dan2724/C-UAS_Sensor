@@ -4,6 +4,7 @@ classdef UAS < handle
         entrance
         target
         mode
+        position
         xPos
         yPos
         dxPos
@@ -18,12 +19,14 @@ classdef UAS < handle
         end
 
         function obj = linearMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,targetUnitVector)
-            obj.xPos = xPos0 + obj.speed*time*targetUnitVector(1);
-            obj.yPos = yPos0 + obj.speed*time*targetUnitVector(2);
-            obj.dxPos = abs(xtarget - xPos);
-            obj.dyPos = abs(ytarget - yPos);
+            obj.position.xPos = xPos0 + obj.speed*time*targetUnitVector(1);
+            obj.position.yPos = yPos0 + obj.speed*time*targetUnitVector(2);
+            obj.position.dxPos = abs(xtarget - xPos);
+            obj.position.dyPos = abs(ytarget - yPos);
         end
 
-        function obj.searchMotion(obj)
+        function obj = searchMotion(obj)
+
+        end
     end
 end

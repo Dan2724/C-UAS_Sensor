@@ -104,8 +104,8 @@ classdef simulator
                     obj.UAS.searchMotion(xPos, yPos, xtarget, ytarget, obj.time);
 
                 end
-                xPos = obj.UAS.xPos;
-                yPos = obj.UAS.yPos;
+                xPos = obj.UAS.position.xPos;
+                yPos = obj.UAS.position.yPos;
                 
                 % Determine state based on object collision
                 pos = [xPos, yPos];
