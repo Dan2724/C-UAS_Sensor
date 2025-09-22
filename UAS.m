@@ -23,5 +23,7 @@ classdef UAS < handle
             obj.dxPos = abs(xtarget - xPos);
             obj.dyPos = abs(ytarget - yPos);
         end
+
+        function obj.searchMotion(obj)
     end
 end
