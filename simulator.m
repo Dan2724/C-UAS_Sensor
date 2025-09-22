@@ -6,6 +6,7 @@ classdef simulator
     properties
         map
         UAS
+        sensors
         asset
         time
         dt
@@ -13,18 +14,19 @@ classdef simulator
     end
 
     methods
-        function obj = simulator(map, uas, asset, dt, animate)
+        function obj = simulator(map, uas, sensors, asset, dt, animate)
             %SIMULATOR 
             obj.map = map;
             obj.UAS = uas;
+            obj.sensors = sensors;
             obj.asset = asset;
             obj.time = 0;
             obj.dt = dt;
             obj.animate = animate;
         end
 
-        function success = runSim(obj)
-            success = 0;
+        function result = runSim(obj)
+            result = 0;
 
             xPos0 = obj.UAS.entrance(1);
             yPos0 = obj.UAS.entrance(2);
@@ -38,46 +40,116 @@ classdef simulator
 
             if obj.animate == true
                 obj.map.displayMap
-                plot(xtarget, ytarget, 'Marker', '^', 'Color', 'b')
-                UAVPath = animatedline('Color', 'r');
-            end
 
-            while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
-                xline(0,'k')
-                yline(0,'k')
+                % Plot asset
+                plot(xtarget, ytarget, 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10)
+
+                % Plot sensors
+                for i = 1:length(obj.sensors)
+                    x = obj.sensors(i).location(1);
+                    y = obj.sensors(i).location(2);
+                    r = obj.sensors(i).range;
+
+                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
+                        'Curvature', [1 1], ...
+                        'FaceColor', 'b', ...
+                        'EdgeColor', 'b', ...
+                        'FaceAlpha', 0.05)
+                    plot(x, y, 'o', 'Color', 'b')
+                end
+
+                %
                 xlim([0,obj.map.size.horiz])
                 ylim([0,obj.map.size.vert])
+
+                % Set up animation
+                UAVTrail = plot(NaN, NaN, 'Color', 'r');
+                UAVHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
+                UAVx = []; UAVy = [];
+            end
+
+
+
+            while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
+                % This while loop is a tad clunky and not necessary
+
+                % Linear movement (Should be moved to separate function
+                % based on UAV mode)
                 xPos = xPos0 + obj.UAS.speed*obj.time*targetUnitVector(1);
                 yPos = yPos0 + obj.UAS.speed*obj.time*targetUnitVector(2);
                 dxPos = abs(xtarget - xPos);
                 dyPos = abs(ytarget - yPos);
-                if dxPos <= obj.UAS.speed*obj.dt && dyPos <= obj.UAS.speed*obj.dt
-                    if obj.animate == true
-                        obj.updateAnimation(UAVPath, xtarget, ytarget)
-                        obj.animateDestroyed([xtarget, ytarget])
-                    end
-                    success = 1;
-                    break
-                end
                 
-                obj.updateAnimation(UAVPath, xPos, yPos)
+                % Determine state based on object collision
+                state = obj.checkCollision(xPos, yPos, dxPos, dyPos);
+                
+                if obj.animate
+                    UAVx(end+1) = xPos;
+                    UAVy(end+1) = yPos;
+                end
 
-                obj.time = obj.time + obj.dt;
+                if state == 1 % UAV sensed
+                    if obj.animate
+                        obj.animateUAVDestroyed([xPos, yPos])
+                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                    end
+                    result = 'UAV Destroyed';
+                    break
+                elseif state == 2 % Asset attacked
+                    if obj.animate
+                        obj.animateAssetDestroyed([xtarget, ytarget])
+                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                    end
+                    result = 'Asset Destroyed';
+                    break
+                else % UAV safe
+                    if obj.animate
+                        pause(obj.dt)
+                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                    end
+                end
+
+                obj.time = obj.time + obj.dt; % Progress time
             end
         end
 
-        function checkCollision(obj)
+        function state = checkCollision(obj, x, y, dx, dy)
+            % Sensor collision
+            for i = 1:length(obj.sensors)
+                r = [x, y] - obj.sensors(i).location;
+                if norm(r) <= obj.sensors(i).range
+                    state = 1;
+                    return
+                end
+            end
 
+            % Asset collision
+            if dx <= obj.UAS.speed*obj.dt && dy <= obj.UAS.speed*obj.dt
+                state = 2;
+                return
+            end
+            
+            % No collision
+            state = 0;
+            return
         end
+        
     end
+
     methods(Static)
-        function updateAnimation(UAVPath, xPos, yPos)
-            addpoints(UAVPath, xPos,yPos);
+        % Main animation update (rename to updateUAVAnimation?)
+        function updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+            set(UAVTrail, 'XData', UAVx, 'YData', UAVy)
+            set(UAVHead, 'XData', UAVx(end), 'YData', UAVy(end))
             drawnow;
         end
-
-        function animateDestroyed(target)
+        
+        function animateAssetDestroyed(target)
             plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 12)
+        end
+
+        function animateUAVDestroyed(position)
+            plot(position(1), position(2), 'Marker', 'x', 'Color', 'g', 'MarkerSize', 12)
         end
     end
 end

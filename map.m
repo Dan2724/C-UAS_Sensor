@@ -11,9 +11,9 @@ classdef map < handle
         end
 
         function displayMap(obj) % Display the initial map size and labels
+            hold on
             xlim([0,obj.size.horiz])
             ylim([0,obj.size.vert])
-            hold on
             grid on
             axis equal
             title("UAS Simulation")

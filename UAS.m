@@ -3,13 +3,14 @@ classdef UAS < handle
         speed
         entrance
         target
-        
+        mode
     end
     methods
-        function obj = UAS(speed, entrance, target)
+        function obj = UAS(speed, entrance, target, mode)
             obj.speed = speed;
             obj.entrance = entrance;
             obj.target = target;
+            obj.mode = mode;
         end
     end
 end
