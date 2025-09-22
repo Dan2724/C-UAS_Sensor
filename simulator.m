@@ -97,11 +97,10 @@ classdef simulator
 
 
             while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
-
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(xPos, yPos, xtarget, ytarget, obj.time);
+                    obj.UAS.searchMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector,obj.assets);
 
                 end
                 xPos = obj.UAS.position.xPos;

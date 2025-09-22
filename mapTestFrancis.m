@@ -10,7 +10,7 @@ asset2 = asset([60,45]);
 sensor1 = sensor([25, 25], 15); % Define sensor(s)
 sensor2 = sensor([75, 75], 15); % Define sensor(s)
 
-UAS1 = UAS(15, [50, 0], [40,40], 'Linear'); % Define UAS (speed, entrance, target, mode)
+UAS1 = UAS(15, [50, 0], [40,40], 'Search'); % Define UAS (speed, entrance, target, mode)
 
 NFZ1 = polyshape([8, 25, 42, 44, 12], [91, 72, 89, 66, 70]);
 

@@ -97,19 +97,24 @@ classdef simulator
 
 
             while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
-                % This while loop is a tad clunky and not necessary
+                if obj.UAS.mode == 'Linear'
+                    obj.UAS.linearMotion(xPos0,yPos0,xPos,yPos,xtarget,ytarget,obj.time,targetUnitVector);
+                elseif obj.UAS.mode == 'Search'
+                    for n = 1:length(obj.assets)
+                        assestQuant = length(obj.assets);
+                        assets =
+                    end
 
-                % Linear movement (Should be moved to separate function
-                % based on UAV mode)
-                xPos = xPos0 + obj.UAS.speed*obj.time*targetUnitVector(1);
-                yPos = yPos0 + obj.UAS.speed*obj.time*targetUnitVector(2);
-                dxPos = abs(xtarget - xPos);
-                dyPos = abs(ytarget - yPos);
+                    obj.UAS.searchMotion(xPos, yPos, xtarget, ytarget, obj.time,obj.assets);
+
+                end
+                xPos = obj.UAS.position.xPos;
+                yPos = obj.UAS.position.yPos;
                 
                 % Determine state based on object collision
                 pos = [xPos, yPos];
                 [eventSensor] = obj.checkSensorCollision(pos);
-                [eventAsset,  asset] = obj.checkAssetCollision(xPos, yPos, );
+                [eventAsset,  asset] = obj.checkAssetCollision(xPos, yPos, obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(xPos, yPos);
                 
                 if obj.animate
@@ -172,11 +177,11 @@ classdef simulator
             end
         end
 
-        function [event, asset] = checkAssetCollision(obj, xPos, yPos, deltaPos)
+        function [event, asset] = checkAssetCollision(obj, xPos, yPos, speed)
             % Asset collision
             for i = 1:length(obj.assets)
                 deltaAsset = norm(obj.assets(i).location - [xPos, yPos]);
-                if deltaPos <= deltaAsset
+                if deltaAsset <= speed
                     event = 1;
                     asset = i;
                     return

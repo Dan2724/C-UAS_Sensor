@@ -5,10 +5,6 @@ classdef UAS < handle
         target
         mode
         position
-        xPos
-        yPos
-        dxPos
-        dyPos
     end
     methods
         function obj = UAS(speed, entrance, target, mode)
@@ -25,7 +21,14 @@ classdef UAS < handle
             obj.position.dyPos = abs(ytarget - yPos);
         end
 
-        function obj = searchMotion(obj)
+        function obj = searchMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,targetUnitVector,assets)
+            for n = 1:length(assets)
+                assetDistance(n) = norm([xPos, yPos] - assets(n).location);
+
+
+
+            end
+            assetDistance <= 20
 
         end
     end
