@@ -94,7 +94,7 @@ classdef simulator
                 UAVx = []; UAVy = [];
             end
 
-
+            
 
             while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
 
