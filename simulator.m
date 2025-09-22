@@ -5,24 +5,38 @@ classdef simulator
 
     properties
         map
+        AOR
         UAS
         sensors
         asset
         time
         dt
         animate
+        NFZs
     end
 
     methods
-        function obj = simulator(map, uas, sensors, asset, dt, animate)
-            %SIMULATOR 
+        function obj = simulator(map, aor, uas, sensors, asset, dt, animate, nfzs)
+            %SIMULATOR
+            arguments
+                map
+                aor
+                uas
+                sensors
+                asset
+                dt
+                animate
+                nfzs polyshape = polyshape.empty % Exclude input if not needed
+            end
             obj.map = map;
+            obj.AOR = aor;
             obj.UAS = uas;
             obj.sensors = sensors;
             obj.asset = asset;
             obj.time = 0;
             obj.dt = dt;
             obj.animate = animate;
+            obj.NFZs = nfzs;
         end
 
         function result = runSim(obj)
@@ -41,9 +55,19 @@ classdef simulator
             if obj.animate == true
                 obj.map.displayMap
 
-                % Plot asset
-                plot(xtarget, ytarget, 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10)
+                % Plot AOR
+                plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05)
 
+                % Plot asset
+                plot(xtarget, ytarget, 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10, 'LineWidth', 5)
+
+                % Plot NFZs
+                if isempty(obj.NFZs) == 0
+                    for i = 1:length(obj.NFZs)
+                        plot(obj.NFZs(i), 'FaceColor', 'm', 'FaceAlpha', 0.2)
+                    end
+                end
+                    
                 % Plot sensors
                 for i = 1:length(obj.sensors)
                     x = obj.sensors(i).location(1);
@@ -93,14 +117,23 @@ classdef simulator
                         obj.animateUAVDestroyed([xPos, yPos])
                         obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
                     end
-                    result = 'UAV Destroyed';
+                    result = 1;
                     break
                 elseif state == 2 % Asset attacked
                     if obj.animate
                         obj.animateAssetDestroyed([xtarget, ytarget])
+                        UAVx(end+1) = xtarget;
+                        UAVy(end+1) = ytarget;
                         obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
                     end
-                    result = 'Asset Destroyed';
+                    result = 0;
+                    break
+                elseif state == 3 % UAV entered NFZ
+                    if obj.animate
+                        obj.animateUAVDestroyed([xPos, yPos])
+                        obj.updateAnimation(UAVTrail, UAVHead, UAVx, UAVy)
+                    end
+                    result = 1;
                     break
                 else % UAV safe
                     if obj.animate
@@ -127,6 +160,16 @@ classdef simulator
             if dx <= obj.UAS.speed*obj.dt && dy <= obj.UAS.speed*obj.dt
                 state = 2;
                 return
+            end
+
+            % NFZ collision
+            if isempty(obj.NFZs) == 0
+                for i = 1:length(obj.NFZs)
+                    if isinterior(obj.NFZs(i), x, y) == 1
+                        state = 3;
+                        return
+                    end
+                end
             end
             
             % No collision
