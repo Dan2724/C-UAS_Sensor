@@ -41,34 +41,27 @@ classdef simulator
 
         function result = runSim(obj)
             result = 0;
+            eventExitBounds = 0;
+            sensedCount = 0;
+            sensed = [];
+            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
+            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
 
-            % This matrix tracks all current and previous UAS positions
-            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];
-            % This matrix tracks all UAS targets
-            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)];
-
-            xPos0 = obj.UAS.entrance(1);
-            yPos0 = obj.UAS.entrance(2);
-
-            xPos = xPos0;
-            yPos = yPos0;
             targetUnitVector = (UASTarget - UASPos(1,:)) / norm(UASTarget - UASPos(1,:));
 
             if obj.animate == true
                 obj.startAnimation(obj);
-                UAVTrail = plot(NaN, NaN, 'Color', 'r');
-                UAVHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
+                UASTrail = plot(NaN, NaN, 'Color', 'r');
+                UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
+                UASSensed = plot(Nan, Nan, 'Color', 'y', 'Marker', 'square');
             end
 
-
-            while xPos <= obj.map.size.horiz && yPos <= obj.map.size.vert
+            while eventExitBounds == 0
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector);
                 elseif obj.UAS.mode == 'Search'
                     obj.UAS.searchMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector,obj.assets);
                 end
-                xPos = obj.UAS.position.xPos;
-                yPos = obj.UAS.position.yPos;
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
 
@@ -76,34 +69,41 @@ classdef simulator
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
-                [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :));
+                [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
                 if eventSensor == 1 % UAV sensed
+                    sensed = cat(1, sensed, UASPos(end, :))
                     if obj.animate
-                        obj.animateUAVDestroyed(UASPos(end, :))
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
+                        obj.updateSensedLocations(sensed, UASSensed)
                     end
-                    result = 1;
-                    break
+                    if sensedCount == 5
+                        result = 1;
+                        if obj.animate
+                            obj.animateUAVDestroyed(UASPos(end, :))
+                        end
+                        break
+                    end
                 elseif eventAsset == 1 % Asset attacked
                     UASPos = cat(1, UASPos, UASTarget);
                     if obj.animate
                         obj.animateAssetDestroyed([obj.assets(asset).location(1), obj.assets(asset).location(2)]);
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                     result = 0;
                     break
                 elseif eventNFZ == 1 % UAV entered NFZ
                     if obj.animate
                         obj.animateUAVDestroyed(UASPos(end, :))
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                     result = 1;
                     break
                 else % UAV safe
+                    sensedCount = sensedCount + 1;
                     if obj.animate
                         pause(obj.dt)
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                 end
 
@@ -159,6 +159,16 @@ classdef simulator
                 end
             end
         end
+
+        function [event] = checkOutOfBounds(~, pos, size)
+            if pos(1) < 0 || pos(1) > size.vert
+                event = 1;
+            elseif pos(2) < 0 || pos(2) > size.horiz
+                event = 1;
+            else
+                event = 0;
+            end
+        end
     end
 
     methods(Static)
@@ -208,6 +218,10 @@ classdef simulator
             set(UAVTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
             set(UAVHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
             drawnow;
+        end
+
+        function updateSensedLocation(sensed, UASSensed)
+            set(sensed(:, 1), sensed(end, 2))
         end
 
         function animateAssetDestroyed(target)

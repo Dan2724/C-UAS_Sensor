@@ -42,6 +42,8 @@ classdef simulator
         function result = runSim(obj)
             result = 0;
             eventExitBounds = 0;
+            sensedCount = 0;
+            sensed = [];
             UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
             UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
 
@@ -49,11 +51,15 @@ classdef simulator
 
             if obj.animate == true
                 obj.startAnimation(obj);
-                UAVTrail = plot(NaN, NaN, 'Color', 'r');
-                UAVHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
+                UASTrail = plot(NaN, NaN, 'Color', 'r');
+                UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
+                UASSensed = plot(NaN, NaN, 'Color', 'y', 'Marker', 'square', 'LineStyle','none');
             end
-            
+
             while eventExitBounds == 0
+                if obj.animate
+                    pause(obj.dt/5)
+                end
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector);
                 elseif obj.UAS.mode == 'Search'
@@ -69,31 +75,38 @@ classdef simulator
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
                 if eventSensor == 1 % UAV sensed
+                    sensed = cat(1, sensed, UASPos(end, :));
+                    sensedCount = sensedCount + 1;
                     if obj.animate
-                        obj.animateUAVDestroyed(UASPos(end, :))
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
+                        obj.updateSensedLocations(sensed, UASSensed)
                     end
-                    result = 1;
-                    break
+                    if sensedCount == 10 % Determines how many tiems the UAS needs to be sensed to be "killed"
+                        result = 1;
+                        if obj.animate
+                            obj.animateUAVDestroyed(UASPos(end, :))
+                        end
+                        break
+                    end
                 elseif eventAsset == 1 % Asset attacked
                     UASPos = cat(1, UASPos, UASTarget);
                     if obj.animate
                         obj.animateAssetDestroyed([obj.assets(asset).location(1), obj.assets(asset).location(2)]);
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                     result = 0;
                     break
                 elseif eventNFZ == 1 % UAV entered NFZ
                     if obj.animate
                         obj.animateUAVDestroyed(UASPos(end, :))
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                     result = 1;
                     break
                 else % UAV safe
+                    sensedCount = 0;
                     if obj.animate
-                        pause(obj.dt)
-                        obj.updateAnimation(UAVTrail, UAVHead, UASPos)
+                        obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                 end
 
@@ -164,6 +177,7 @@ classdef simulator
     methods(Static)
         % Initialize animation
         function startAnimation(obj)
+            clf
             obj.map.displayMap
 
             % Plot AOR
@@ -204,20 +218,21 @@ classdef simulator
         end
 
         % Main animation update (rename to updateUAVAnimation?)
-        function updateAnimation(UAVTrail, UAVHead, UASPos)
-            set(UAVTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
-            set(UAVHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
-            drawnow;
+        function updateAnimation(UASTrail, UASHead, UASPos)
+            set(UASTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
+            set(UASHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
+        end
+
+        function updateSensedLocations(sensedPos, UASSensed)
+            set(UASSensed, 'XData', sensedPos(:, 1), 'YData', sensedPos(:, 2))
         end
 
         function animateAssetDestroyed(target)
             plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 12)
-            drawnow;
         end
 
         function animateUAVDestroyed(position)
             plot(position(1), position(2), 'Marker', 'x', 'Color', 'g', 'MarkerSize', 12)
-            drawnow;
         end
     end
 end
