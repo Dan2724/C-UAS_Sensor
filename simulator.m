@@ -89,7 +89,6 @@ classdef simulator
                         break
                     end
                 elseif eventAsset == 1 % Asset attacked
-                    UASPos = cat(1, UASPos, obj.assets(asset).location);
                     if obj.animate
                         obj.animateAssetDestroyed(obj.assets(asset).location);
                         obj.updateAnimation(UASTrail, UASHead, UASPos)
