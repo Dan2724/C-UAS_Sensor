@@ -23,7 +23,7 @@ AOR = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);                        % de
 results = zeros(100, 1);                                                    % preallocate results vector (1 = kill, 0 = no kill, [2 = NFZ hit])
 
 for i = 1:height(entrances)                                                 % run sim for every UAS entrance location and record kill/nokill/NFZincursion in results vector                                           
-    sim = simulator(map, AOR, UAS(15, entrances(i, :), asset1.location, 'Linear'), [sensor1, sensor2], [asset1, asset2], 0.05, 0, NFZ1);
+    sim = simulator(map, AOR, UAS(15, entrances(i, :), asset1.location, 'Linear'), [sensor1, sensor2], [asset1, asset2], tps=20, animate=false, nfzs=NFZ1);
     results(i,1) = sim.runSim();
 end
      

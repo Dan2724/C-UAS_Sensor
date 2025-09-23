@@ -9,14 +9,15 @@ classdef simulator
         UAS
         sensors
         assets
-        time
+        tick
         dt
+        tps
         animate
         NFZs
     end
 
     methods
-        function obj = simulator(map, aor, uas, sensors, assets, dt, animate, nfzs)
+        function obj = simulator(map, aor, uas, sensors, assets, options)
             %SIMULATOR
             arguments
                 map
@@ -24,19 +25,20 @@ classdef simulator
                 uas
                 sensors
                 assets
-                dt
-                animate
-                nfzs polyshape = polyshape.empty % Exclude input if not needed
+                options.tps double = 20
+                options.animate logical = true
+                options.nfzs polyshape = polyshape.empty
             end
             obj.map = map;
             obj.AOR = aor;
             obj.UAS = uas;
             obj.sensors = sensors;
             obj.assets = assets;
-            obj.time = 0;
-            obj.dt = dt;
-            obj.animate = animate;
-            obj.NFZs = nfzs;
+            obj.tick = 0;
+            obj.tps = options.tps;
+            obj.dt = 1 / obj.tps;
+            obj.animate = options.animate;
+            obj.NFZs = options.nfzs;
         end
 
         function result = runSim(obj)
@@ -62,7 +64,7 @@ classdef simulator
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
 
-                % Determine state based on object collision
+                % Check for any logical events
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
@@ -88,14 +90,14 @@ classdef simulator
                     end
                     result = 2;
                     break
-                else % UAV safe
+                else % UAV is safe
                     if obj.animate
                         obj.map.updateUASAnimation(UASPos)
                     end
                     result = 0;
                 end
 
-                obj.time = obj.time + obj.dt; % Progress time
+                obj.tick = obj.tick + 1; % Progress time
             end
         end
 
