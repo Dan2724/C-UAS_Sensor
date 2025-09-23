@@ -47,8 +47,13 @@ classdef simulator
             obj.animationMultiplier = options.animationMultiplier;
         end
 
-        function result = runSim(obj)
-            result = 0;
+        function results = runSim(obj)
+            results.UASPos = [];
+            results.assetsDestroyed = 0; % Initialize assets destroyed count
+            results.UASSensed = []; % Initialize UAS sensed count
+            results.NFZEntered = false; % Initialize NFZ entry status
+
+
             eventExitBounds = 0;
             sensed = [];
             UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
@@ -79,31 +84,34 @@ classdef simulator
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
-                if eventSensor == 1 % UAV sensed
-                    sensed = cat(1, sensed, UASPos(end, :));
+                results.UASPos = UASPos;
+                results.tick = obj.tick;
+
+                if eventSensor == 1 % UAS sensed
+                    sensed = cat(1, sensed, [obj.tick*obj.tps/60, UASPos(end, :)]);
+                    results.UASSensed = sensed;
                     if obj.animate
                         obj.map.updateUASAnimation(UASPos)
-                        obj.map.updateSensedLocations(sensed)
+                        obj.map.updateSensedLocations(sensed(:, 2:3))
                     end
-                    result = 0;
+                    results.UASSensed = results.UASSensed + 1;
                 elseif eventAsset == 1 % Asset attacked
                     if obj.animate
                         obj.map.animateAssetDestroyed(obj.assets(asset).location);
                         obj.map.updateUASAnimation(UASPos)
                     end
-                    result = 1;
-                elseif eventNFZ == 1 % UAV entered NFZ
+                    results.assetsDestroyed = results.assetsDestroyed + 1;
+                elseif eventNFZ == 1 % UAS entered NFZ
                     if obj.animate
                         obj.map.animateUASDestroyed(UASPos(end, :))
                         obj.map.updateUASAnimation(UASPos)
                     end
-                    result = 2;
+                    results.NFZEntered = true;
                     break
-                else % UAV is safe
+                else % UAS is safe
                     if obj.animate
                         obj.map.updateUASAnimation(UASPos)
                     end
-                    result = 0;
                 end
 
                 obj.tick = obj.tick + 1; % Progress time
