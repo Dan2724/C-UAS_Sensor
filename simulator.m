@@ -47,8 +47,6 @@ classdef simulator
             UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
             UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
 
-            targetUnitVector = (UASTarget - UASPos(1,:)) / norm(UASTarget - UASPos(1,:));
-
             if obj.animate == true
                 obj.startAnimation(obj);
                 UASTrail = plot(NaN, NaN, 'Color', 'r', 'DisplayName', "UAS Trail");
@@ -61,9 +59,9 @@ classdef simulator
                     pause(obj.dt/5)
                 end
                 if obj.UAS.mode == 'Linear'
-                    obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector);
+                    obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,targetUnitVector,obj.assets);
+                    obj.UAS.searchMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.time,obj.assets);
                 end
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);

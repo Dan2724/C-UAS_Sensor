@@ -16,6 +16,7 @@ classdef UAS < handle
         end
 
         function obj = linearMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time)
+            obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
             obj.position.xPos = xPos0 + obj.speed*time*obj.targetUnitVector(1);
             obj.position.yPos = yPos0 + obj.speed*time*obj.targetUnitVector(2);
             obj.position.dxPos = abs(xtarget - xPos);
@@ -42,11 +43,12 @@ classdef UAS < handle
                     DCM = [cos(-angle) -sin(-angle);sin(-angle) cos(-angle)];
                 end
 
-                obj.targetUnitVector = DCM*obj.targetUnitVector;
+                obj.targetUnitVector = (DCM*obj.targetUnitVector')';
                 obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
                 obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
 
             else
+                obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
                 obj.position.xPos = xPos + obj.speed*0.05*obj.targetUnitVector(1);
                 obj.position.yPos = yPos + obj.speed*0.05*obj.targetUnitVector(2);
                 
