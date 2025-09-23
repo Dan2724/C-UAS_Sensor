@@ -213,7 +213,7 @@ classdef simulator
                         'FaceColor', 'b', ...
                         'EdgeColor', 'b', ...
                         'FaceAlpha', 0.05)
-                    plot(x, y, 'o', 'Color', 'b', 'DisplayName', "Sensor " + i)
+                    plot(x, y, '.', 'Color', 'b', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
                 end
 
                 %
