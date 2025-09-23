@@ -36,7 +36,7 @@ classdef UAS < handle
                 if angleVelo > 1
                     angleVelo = 1; % sets max angular velocity of UAS
                 end
-                angle = angleVelo*0.05; % need to adust time fuction
+                angle = angleVelo*time; % need to adust time fuction
                 assetLocation = assets(idx).location - [obj.position.xPos, obj.position.yPos];
 
                 targetAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation))); % determines the angle between the movement vector and the vector to asset
@@ -50,20 +50,20 @@ classdef UAS < handle
 
                     obj.targetUnitVector = (DCM*obj.targetUnitVector')';
                     % need to adjust the time function
-                    obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
-                    obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
+                    obj.position.xPos = obj.position.xPos + obj.speed*time*obj.targetUnitVector(1);
+                    obj.position.yPos = obj.position.yPos + obj.speed*time*obj.targetUnitVector(2);
 
                 else
                     % need to adjust time function
-                    obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
-                    obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
+                    obj.position.xPos = obj.position.xPos + obj.speed*time*obj.targetUnitVector(1);
+                    obj.position.yPos = obj.position.yPos + obj.speed*time*obj.targetUnitVector(2);
                 end
 
             else
                 obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
                 % need to adjust time function
-                obj.position.xPos = xPos + obj.speed*0.05*obj.targetUnitVector(1);
-                obj.position.yPos = yPos + obj.speed*0.05*obj.targetUnitVector(2);
+                obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
+                obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
                 
             end
 
