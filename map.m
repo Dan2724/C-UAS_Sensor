@@ -37,7 +37,7 @@ classdef map < handle
 
             % Determine if plot has already been initialized
             axesChildren = get(gca, 'Children');
-            axesMatch = findobj(axesChildren, 'DisplayName', "AOR");
+            axesMatch = findobj(axesChildren, 'DisplayName', "AOR");       % I, Daniel Burns, do recognize that this is quite possibly the worst way to make this check.
 
             if isempty(axesMatch)
                 % Plot AOR
@@ -88,6 +88,10 @@ classdef map < handle
 
         function animateUASDestroyed(obj, position)
             set(obj.UASDestroyed, 'XData', position(1), 'YData', position(2))
+        end
+
+        function wipeAnimation(obj)
+            clf
         end
     end
 end

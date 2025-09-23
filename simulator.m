@@ -14,6 +14,8 @@ classdef simulator
         tps
         animate
         NFZs
+        resetGraphics
+        animationMultiplier
     end
 
     methods
@@ -25,9 +27,11 @@ classdef simulator
                 uas
                 sensors
                 assets
-                options.tps double = 20
-                options.animate logical = true
-                options.nfzs polyshape = polyshape.empty
+                options.tps double = 20                                    % How many ticks per second the logical system should operate in, AKA: simulation resolution
+                options.animate logical = true                             % Set false if you just want data
+                options.nfzs polyshape = polyshape.empty                   % This is where you declare any NFZs you want, should you decide to do so
+                options.resetGraphics logical = true                       % This will reset all graphics if used over multiple iterations FOR THE SAME MAP! As such, default is true
+                options.animationMultiplier double = 1                     % Animation speed multiplier, default 1x
             end
             obj.map = map;
             obj.AOR = aor;
@@ -39,22 +43,27 @@ classdef simulator
             obj.dt = 1 / obj.tps;
             obj.animate = options.animate;
             obj.NFZs = options.nfzs;
+            obj.resetGraphics = options.resetGraphics;
+            obj.animationMultiplier = options.animationMultiplier;
         end
 
         function result = runSim(obj)
             result = 0;
             eventExitBounds = 0;
             sensed = [];
-            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
-            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
+            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
+            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)];            % This matrix tracks all UAS targets
 
             if obj.animate == true
+                if obj.resetGraphics
+                    obj.map.wipeAnimation()
+                end
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors);
             end
 
             while eventExitBounds == 0
                 if obj.animate
-                    pause(obj.dt/5)
+                    pause(obj.dt/obj.animationMultiplier)
                 end
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.dt);
