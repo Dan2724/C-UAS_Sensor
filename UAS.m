@@ -31,24 +31,34 @@ classdef UAS < handle
             [distance, idx] = min(assetDistance);                           % Determine which asset is closer if more than one is in range
 
             if distance <= 20
-                turnRadius = 5;
+                turnRadius = distance/2;
                 angleVelo = obj.speed/turnRadius;
-                angle = angleVelo*0.05;
+                angle = angleVelo*0.05; % need to adust time fuction
+                assetLocation = assets(idx).location - [obj.position.xPos, obj.position.yPos];
 
-                targetAngle = atan2(assets(idx).location(1) - obj.position.xPos,assets(idx).location(2) - obj.position.yPos);
-                
-                if targetAngle < 0
-                    DCM = [cos(angle) -sin(angle);sin(angle) cos(angle)];
-                elseif targetAngle > 0
-                    DCM = [cos(-angle) -sin(-angle);sin(-angle) cos(-angle)];
+                targetAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation)));
+                rotDir = cross([obj.targetUnitVector,0],[obj.position.xPos,obj.position.yPos,0]-[assets(idx).location,0]);
+                if targetAngle ~= 0
+                    if rotDir(3) < 0
+                        DCM = [cos(angle) -sin(angle);sin(angle) cos(angle)];
+                    elseif rotDir(3) > 0
+                        DCM = [cos(-angle) -sin(-angle);sin(-angle) cos(-angle)];
+                    end
+
+                    obj.targetUnitVector = (DCM*obj.targetUnitVector')';
+                    % need to adjust the time function
+                    obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
+                    obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
+
+                else
+                    % need to adjust time function
+                    obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
+                    obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
                 end
-
-                obj.targetUnitVector = (DCM*obj.targetUnitVector')';
-                obj.position.xPos = obj.position.xPos + obj.speed*0.05*obj.targetUnitVector(1);
-                obj.position.yPos = obj.position.yPos + obj.speed*0.05*obj.targetUnitVector(2);
 
             else
                 obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
+                % need to adjust time function
                 obj.position.xPos = xPos + obj.speed*0.05*obj.targetUnitVector(1);
                 obj.position.yPos = yPos + obj.speed*0.05*obj.targetUnitVector(2);
                 
