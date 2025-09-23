@@ -33,13 +33,16 @@ classdef UAS < handle
             if distance <= 20
                 turnRadius = distance/2;
                 angleVelo = obj.speed/turnRadius;
+                if angleVelo > 1
+                    angleVelo = 1; % sets max angular velocity of UAS
+                end
                 angle = angleVelo*0.05; % need to adust time fuction
                 assetLocation = assets(idx).location - [obj.position.xPos, obj.position.yPos];
 
-                targetAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation)));
-                rotDir = cross([obj.targetUnitVector,0],[obj.position.xPos,obj.position.yPos,0]-[assets(idx).location,0]);
-                if targetAngle ~= 0
-                    if rotDir(3) < 0
+                targetAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation))); % determines the angle between the movement vector and the vector to asset
+                rotDir = cross([obj.targetUnitVector,0],[obj.position.xPos,obj.position.yPos,0]-[assets(idx).location,0]); % determines rotational direction
+                if targetAngle > 0.1 % sets threshold for when the UAS will turn
+                    if rotDir(3) < 0    % DCM based on rotation speed and direction
                         DCM = [cos(angle) -sin(angle);sin(angle) cos(angle)];
                     elseif rotDir(3) > 0
                         DCM = [cos(-angle) -sin(-angle);sin(-angle) cos(-angle)];
