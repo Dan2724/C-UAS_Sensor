@@ -51,9 +51,9 @@ classdef simulator
 
             if obj.animate == true
                 obj.startAnimation(obj);
-                UASTrail = plot(NaN, NaN, 'Color', 'r');
-                UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^');
-                UASSensed = plot(NaN, NaN, 'Color', 'y', 'Marker', 'square', 'LineStyle','none');
+                UASTrail = plot(NaN, NaN, 'Color', 'r', 'DisplayName', "UAS Trail");
+                UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^', 'DisplayName', "UAS");
+                UASSensed = plot(NaN, NaN, 'Color', 'y', 'Marker', 'square', 'LineStyle', 'none', 'DisplayName', "UAS Sensor Detection Point");
             end
 
             while eventExitBounds == 0
@@ -89,9 +89,8 @@ classdef simulator
                         break
                     end
                 elseif eventAsset == 1 % Asset attacked
-                    UASPos = cat(1, UASPos, UASTarget);
                     if obj.animate
-                        obj.animateAssetDestroyed([obj.assets(asset).location(1), obj.assets(asset).location(2)]);
+                        obj.animateAssetDestroyed(obj.assets(asset).location);
                         obj.updateAnimation(UASTrail, UASHead, UASPos)
                     end
                     result = 0;
@@ -177,44 +176,49 @@ classdef simulator
     methods(Static)
         % Initialize animation
         function startAnimation(obj)
-            clf
             obj.map.displayMap
 
-            % Plot AOR
-            plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05)
+            % Determine if plot has already been initialized
+            axesChildren = get(gca, 'Children');
+            axesMatch = findobj(axesChildren, 'DisplayName', "AOR");
 
-            % Plot assets
-            for i = 1:length(obj.assets)
-                plot(obj.assets(i).location(1), obj.assets(i).location(2), 'Marker', 'square', 'Color', 'b', 'MarkerSize', 10, 'LineWidth', 5)
-            end
 
-            % Plot NFZs
-            if isempty(obj.NFZs) == 0
-                for i = 1:length(obj.NFZs)
-                    plot(obj.NFZs(i), 'FaceColor', 'm', 'FaceAlpha', 0.2)
+            if isempty(axesMatch)
+                % Plot AOR
+                plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05, 'DisplayName', "AOR");
+
+                % Plot assets
+                for i = 1:length(obj.assets)
+                    plot(obj.assets(i).location(1), obj.assets(i).location(2), 'Marker', 'square', 'Color', 'g', 'MarkerSize', 10, 'LineWidth', 2, 'LineStyle','none' , 'DisplayName', "Asset " + i);
                 end
+
+
+
+                % Plot NFZs
+                if isempty(obj.NFZs) == 0
+                    for i = 1:length(obj.NFZs)
+                        plot(obj.NFZs(i), 'FaceColor', 'y', 'FaceAlpha', 0.2, 'EdgeColor', 'y', 'DisplayName', "NFZ " + i);
+                    end
+                end
+
+                % Plot sensors
+                for i = 1:length(obj.sensors)
+                    x = obj.sensors(i).location(1);
+                    y = obj.sensors(i).location(2);
+                    r = obj.sensors(i).range;
+
+                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
+                        'Curvature', [1 1], ...
+                        'FaceColor', 'b', ...
+                        'EdgeColor', 'b', ...
+                        'FaceAlpha', 0.05)
+                    plot(x, y, '.', 'Color', 'b', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
+                end
+
+                %
             end
-
-            % Plot sensors
-            for i = 1:length(obj.sensors)
-                x = obj.sensors(i).location(1);
-                y = obj.sensors(i).location(2);
-                r = obj.sensors(i).range;
-
-                rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
-                    'Curvature', [1 1], ...
-                    'FaceColor', 'b', ...
-                    'EdgeColor', 'b', ...
-                    'FaceAlpha', 0.05)
-                plot(x, y, 'o', 'Color', 'b')
-            end
-
-            %
             xlim([0,obj.map.size.horiz])
             ylim([0,obj.map.size.vert])
-
-            % Set up animation
-            
         end
 
         % Main animation update (rename to updateUAVAnimation?)
@@ -228,11 +232,12 @@ classdef simulator
         end
 
         function animateAssetDestroyed(target)
-            plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 12)
+            plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 20, 'LineWidth', 2, 'DisplayName', "Asset Destroyed")
         end
 
         function animateUAVDestroyed(position)
             plot(position(1), position(2), 'Marker', 'x', 'Color', 'g', 'MarkerSize', 12)
         end
+
     end
 end
