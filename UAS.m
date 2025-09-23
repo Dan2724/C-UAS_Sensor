@@ -22,13 +22,43 @@ classdef UAS < handle
         end
 
         function obj = searchMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,targetUnitVector,assets)
-            for n = 1:length(assets)
+            turnRadius = 30;
+            angleVelo = obj.speed/turnRadius;                                    % hard coded turning radius (5)
+            angle = angleVelo*time;
+
+            for n = 1:length(assets)                                        % Determine if the asset is in range of the UAS
                 assetDistance(n) = norm([xPos, yPos] - assets(n).location);
 
-
-
             end
-            assetDistance <= 20
+            [distance, idx] = min(assetDistance);                           % Determine which asset is closer if more than one is in range
+
+            if distance <= 20
+                turn = turnRadius*(1-cos(angle));
+                straight = turnRadius*sin(angle);
+                targetVector = targetUnitVector*obj.speed;
+                targetAngle = atan2d(targetVector(2),targetVector(1));
+                relitaveAsset = assets(idx).location - [xPos,yPos];
+
+                for n = 1:2
+                    if relativeAsset(n) > 0
+                        vectorChange(n) = targetVector(n) + speedChange(n);
+                    else
+                        vectorChange(n) = targetVector(n) - speedChange(n);
+                    end
+                end
+                targetUnitVector = (targetVector + speedChange)/norm(targetVector + speedChange);
+                obj.position.xPos = xPos0 + obj.speed*time*targetUnitVector(1);
+                obj.position.yPos = yPos0 + obj.speed*time*targetUnitVector(2);
+                obj.position.dxPos = abs(xtarget - xPos);
+                obj.position.dyPos = abs(ytarget - yPos);
+
+
+            else
+                obj.position.xPos = xPos0 + obj.speed*time*targetUnitVector(1);
+                obj.position.yPos = yPos0 + obj.speed*time*targetUnitVector(2);
+                obj.position.dxPos = abs(xtarget - xPos);
+                obj.position.dyPos = abs(ytarget - yPos);
+            end
 
         end
     end
