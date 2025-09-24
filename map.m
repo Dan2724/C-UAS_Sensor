@@ -6,11 +6,13 @@ classdef map < handle
         UASSensed
         UASDestroyed
         assetDestroyed
+        timeBox
     end
     methods
         function obj = map(vertical, horizontal)
             obj.size.vert = vertical;
             obj.size.horiz = horizontal;
+            
         end
 
         function displayMap(obj) % Display the initial map size and labels
@@ -25,10 +27,9 @@ classdef map < handle
         end
 
         % Initialize animation
-        function startAnimation(obj, AOR, assets, NFZs, sensors)
+        function startAnimation(obj, AOR, assets, NFZs, sensors, hideClock)
             obj.displayMap
             
-            % Plot graphics settings
             obj.UASTrail = plot(NaN, NaN, 'Color', 'r', 'DisplayName', "UAS Trail");
             obj.UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^', 'DisplayName', "UAS");
             obj.UASSensed = plot(NaN, NaN, 'Color', 'y', 'Marker', 'square', 'LineStyle', 'none', 'DisplayName', "UAS Sensor Detection Point");
@@ -42,6 +43,10 @@ classdef map < handle
             if isempty(axesMatch)
                 % Plot AOR
                 plot(AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05, 'DisplayName', "AOR");
+
+                if hideClock == false
+                    obj.timeBox = text(0.05*obj.size.vert, 0.95*obj.size.vert, 't: 0s', 'ColorMode', 'auto', 'EdgeColor', 'k');
+                end
 
                 % Plot assets
                 for i = 1:length(assets)
@@ -70,6 +75,8 @@ classdef map < handle
                 end
             end
 
+            
+
             xlim([0,obj.size.horiz])
             ylim([0,obj.size.vert])
         end
@@ -96,8 +103,17 @@ classdef map < handle
             set(obj.UASDestroyed, 'XData', position(1), 'YData', position(2))
         end
 
+        function updateClock(obj, time)
+            set(obj.timeBox, 'String', ['t: ', sprintf('%.2f', time), 's']);
+        end
+
+        function cleanAnimation(obj)
+            obj.timeBox = [];
+        end
+
         function wipeAnimation(obj)
             clf
+            obj.timeBox = [];
         end
     end
 end
