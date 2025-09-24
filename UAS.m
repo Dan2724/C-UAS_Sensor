@@ -13,14 +13,13 @@ classdef UAS < handle
             obj.entrance = entrance;
             obj.target = target;
             obj.mode = mode;
+            obj.targetUnitVector = (obj.target - obj.entrance)/norm(obj.target - obj.entrance);
         end
 
         function obj = linearMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time)
-            obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
-            obj.position.xPos = xPos0 + obj.speed*time*obj.targetUnitVector(1);
-            obj.position.yPos = yPos0 + obj.speed*time*obj.targetUnitVector(2);
-            obj.position.dxPos = abs(xtarget - xPos);
-            obj.position.dyPos = abs(ytarget - yPos);
+            obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
+            obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
+
         end
 
         function obj = searchMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,assets)
@@ -41,7 +40,7 @@ classdef UAS < handle
 
                 targetAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation))); % determines the angle between the movement vector and the vector to asset
                 rotDir = cross([obj.targetUnitVector,0],[obj.position.xPos,obj.position.yPos,0]-[assets(idx).location,0]); % determines rotational direction
-                if targetAngle > 0.1 % sets threshold for when the UAS will turn
+                if abs(targetAngle) > 0.1 % sets threshold for when the UAS will turn
                     if rotDir(3) < 0    % DCM based on rotation speed and direction
                         DCM = [cos(angle) -sin(angle);sin(angle) cos(angle)];
                     elseif rotDir(3) > 0
@@ -60,8 +59,6 @@ classdef UAS < handle
                 end
 
             else
-                obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
-                % need to adjust time function
                 obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
                 obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
                 
