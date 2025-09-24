@@ -16,17 +16,13 @@ classdef UAS < handle
             obj.targetUnitVector = (obj.target - obj.entrance)/norm(obj.target - obj.entrance);
         end
 
-        function obj = linearMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time)
+        function obj = linearMotion(obj,xPos,yPos,time)
             obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
             obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
-            obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
-            obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
-            obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
-            obj.position.dxPos = abs(xtarget - xPos);
-            obj.position.dyPos = abs(ytarget - yPos);
+
         end
 
-        function obj = searchMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,assets)
+        function obj = searchMotion(obj,xPos,yPos,time,assets)
             for n = 1:length(assets)                                        % Determine if the asset is in range of the UAS
                 assetDistance(n) = norm([xPos, yPos] - assets(n).location);
 
