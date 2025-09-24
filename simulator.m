@@ -49,7 +49,7 @@ classdef simulator
 
         function results = runSim(obj)
             results.UASPos = [];
-            results.assetsDestroyed = 0; % Initialize assets destroyed count
+            results.destroyedAssets = []; % Initialize assets destroyed
             results.UASSensed = []; % Initialize UAS sensed count
             results.NFZEntered = false; % Initialize NFZ entry status
 
@@ -57,7 +57,6 @@ classdef simulator
             eventExitBounds = 0;
             sensed = [];
             UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
-            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)];            % This matrix tracks all UAS targets
 
             if obj.animate == true
                 if obj.resetGraphics
@@ -96,11 +95,13 @@ classdef simulator
                     end
                     results.UASSensed = results.UASSensed + 1;
                 elseif eventAsset == 1 % Asset attacked
-                    if obj.animate
-                        obj.map.animateAssetDestroyed(obj.assets(asset).location);
-                        obj.map.updateUASAnimation(UASPos)
+                    if ~any(results.destroyedAssets == asset)
+                        results.destroyedAssets(end + 1) = asset;
+                        if obj.animate
+                            obj.map.animateDestroyedAssets(obj.assets, results.destroyedAssets);
+                            obj.map.updateUASAnimation(UASPos)
+                        end
                     end
-                    results.assetsDestroyed = results.assetsDestroyed + 1;
                 elseif eventNFZ == 1 % UAS entered NFZ
                     if obj.animate
                         obj.map.animateUASDestroyed(UASPos(end, :))

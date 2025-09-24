@@ -82,8 +82,14 @@ classdef map < handle
             set(obj.UASSensed, 'XData', sensedPos(:, 1), 'YData', sensedPos(:, 2))
         end
 
-        function animateAssetDestroyed(obj, target)
-            set(obj.assetDestroyed, 'XData', target(1), 'YData', target(2))
+        function animateDestroyedAssets(obj, assets, destroyedAssets)
+            XData = [];
+            YData = [];
+            for i = 1:length(destroyedAssets)
+                XData(1, i) = assets(destroyedAssets(i)).location(1);
+                YData(1, i) = assets(destroyedAssets(i)).location(2);
+            end
+            set(obj.assetDestroyed, 'XData', XData, 'YData', YData)
         end
 
         function animateUASDestroyed(obj, position)
