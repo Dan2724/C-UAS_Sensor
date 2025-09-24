@@ -1,7 +1,6 @@
 classdef asset < handle
     properties
         location
-    
     end
     methods
         function obj = asset(location)

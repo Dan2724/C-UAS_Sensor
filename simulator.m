@@ -9,14 +9,17 @@ classdef simulator
         UAS
         sensors
         assets
-        time
+        tick
         dt
+        tps
         animate
         NFZs
+        resetGraphics
+        animationMultiplier
     end
 
     methods
-        function obj = simulator(map, aor, uas, sensors, assets, dt, animate, nfzs)
+        function obj = simulator(map, aor, uas, sensors, assets, options)
             %SIMULATOR
             arguments
                 map
@@ -24,39 +27,48 @@ classdef simulator
                 uas
                 sensors
                 assets
-                dt
-                animate
-                nfzs polyshape = polyshape.empty % Exclude input if not needed
+                options.tps double = 20                                    % How many ticks per second the logical system should operate in, AKA: simulation resolution
+                options.animate logical = true                             % Set false if you just want data
+                options.nfzs polyshape = polyshape.empty                   % This is where you declare any NFZs you want, should you decide to do so
+                options.resetGraphics logical = true                       % This will reset all graphics if used over multiple iterations FOR THE SAME MAP! As such, default is true
+                options.animationMultiplier double = 1                     % Animation speed multiplier, default 1x
             end
             obj.map = map;
             obj.AOR = aor;
             obj.UAS = uas;
             obj.sensors = sensors;
             obj.assets = assets;
-            obj.time = 0;
-            obj.dt = dt;
-            obj.animate = animate;
-            obj.NFZs = nfzs;
+            obj.tick = 0;
+            obj.tps = options.tps;
+            obj.dt = 1 / obj.tps;
+            obj.animate = options.animate;
+            obj.NFZs = options.nfzs;
+            obj.resetGraphics = options.resetGraphics;
+            obj.animationMultiplier = options.animationMultiplier;
         end
 
-        function result = runSim(obj)
-            result = 0;
+        function results = runSim(obj)
+            results.UASPos = [];
+            results.assetsDestroyed = 0; % Initialize assets destroyed count
+            results.UASSensed = []; % Initialize UAS sensed count
+            results.NFZEntered = false; % Initialize NFZ entry status
+
+
             eventExitBounds = 0;
-            sensedCount = 0;
             sensed = [];
-            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)]; % This matrix tracks all current and previous UAS positions
-            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)]; % This matrix tracks all UAS targets
+            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
+            UASTarget = [obj.UAS.target(1), obj.UAS.target(2)];            % This matrix tracks all UAS targets
 
             if obj.animate == true
-                obj.startAnimation(obj);
-                UASTrail = plot(NaN, NaN, 'Color', 'r', 'DisplayName', "UAS Trail");
-                UASHead = plot(NaN, NaN, 'Color', 'r', 'Marker', '^', 'DisplayName', "UAS");
-                UASSensed = plot(NaN, NaN, 'Color', 'y', 'Marker', 'square', 'LineStyle', 'none', 'DisplayName', "UAS Sensor Detection Point");
+                if obj.resetGraphics
+                    obj.map.wipeAnimation()
+                end
+                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors);
             end
 
             while eventExitBounds == 0
                 if obj.animate
-                    pause(obj.dt/5)
+                    pause(obj.dt/obj.animationMultiplier)
                 end
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(1, 1),UASPos(1, 2),UASPos(end, 1),UASPos(end, 2),UASTarget(1),UASTarget(2),obj.dt);
@@ -66,48 +78,43 @@ classdef simulator
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
 
-                % Determine state based on object collision
+                % Check for any logical events
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
-                if eventSensor == 1 % UAV sensed
-                    sensed = cat(1, sensed, UASPos(end, :));
-                    sensedCount = sensedCount + 1;
+                results.UASPos = UASPos;
+                results.tick = obj.tick;
+
+                if eventSensor == 1 % UAS sensed
+                    sensed = cat(1, sensed, [obj.tick*obj.tps/60, UASPos(end, :)]);
+                    results.UASSensed = sensed;
                     if obj.animate
-                        obj.updateAnimation(UASTrail, UASHead, UASPos)
-                        obj.updateSensedLocations(sensed, UASSensed)
+                        obj.map.updateUASAnimation(UASPos)
+                        obj.map.updateSensedLocations(sensed(:, 2:3))
                     end
-                    if sensedCount == 10 % Determines how many tiems the UAS needs to be sensed to be "killed"
-                        result = 1;
-                        if obj.animate
-                            obj.animateUAVDestroyed(UASPos(end, :))
-                        end
-                        break
-                    end
+                    results.UASSensed = results.UASSensed + 1;
                 elseif eventAsset == 1 % Asset attacked
                     if obj.animate
-                        obj.animateAssetDestroyed(obj.assets(asset).location);
-                        obj.updateAnimation(UASTrail, UASHead, UASPos)
+                        obj.map.animateAssetDestroyed(obj.assets(asset).location);
+                        obj.map.updateUASAnimation(UASPos)
                     end
-                    result = 0;
-                    break
-                elseif eventNFZ == 1 % UAV entered NFZ
+                    results.assetsDestroyed = results.assetsDestroyed + 1;
+                elseif eventNFZ == 1 % UAS entered NFZ
                     if obj.animate
-                        obj.animateUAVDestroyed(UASPos(end, :))
-                        obj.updateAnimation(UASTrail, UASHead, UASPos)
+                        obj.map.animateUASDestroyed(UASPos(end, :))
+                        obj.map.updateUASAnimation(UASPos)
                     end
-                    result = 1;
+                    results.NFZEntered = true;
                     break
-                else % UAV safe
-                    sensedCount = 0;
+                else % UAS is safe
                     if obj.animate
-                        obj.updateAnimation(UASTrail, UASHead, UASPos)
+                        obj.map.updateUASAnimation(UASPos)
                     end
                 end
 
-                obj.time = obj.time + obj.dt; % Progress time
+                obj.tick = obj.tick + 1; % Progress time
             end
         end
 
@@ -169,73 +176,5 @@ classdef simulator
                 event = 0;
             end
         end
-    end
-
-    methods(Static)
-        % Initialize animation
-        function startAnimation(obj)
-            obj.map.displayMap
-
-            % Determine if plot has already been initialized
-            axesChildren = get(gca, 'Children');
-            axesMatch = findobj(axesChildren, 'DisplayName', "AOR");
-
-
-            if isempty(axesMatch)
-                % Plot AOR
-                plot(obj.AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05, 'DisplayName', "AOR");
-
-                % Plot assets
-                for i = 1:length(obj.assets)
-                    plot(obj.assets(i).location(1), obj.assets(i).location(2), 'Marker', 'square', 'Color', 'g', 'MarkerSize', 10, 'LineWidth', 2, 'LineStyle','none' , 'DisplayName', "Asset " + i);
-                end
-
-
-
-                % Plot NFZs
-                if isempty(obj.NFZs) == 0
-                    for i = 1:length(obj.NFZs)
-                        plot(obj.NFZs(i), 'FaceColor', 'y', 'FaceAlpha', 0.2, 'EdgeColor', 'y', 'DisplayName', "NFZ " + i);
-                    end
-                end
-
-                % Plot sensors
-                for i = 1:length(obj.sensors)
-                    x = obj.sensors(i).location(1);
-                    y = obj.sensors(i).location(2);
-                    r = obj.sensors(i).range;
-
-                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
-                        'Curvature', [1 1], ...
-                        'FaceColor', 'b', ...
-                        'EdgeColor', 'b', ...
-                        'FaceAlpha', 0.05)
-                    plot(x, y, '.', 'Color', 'b', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
-                end
-
-                %
-            end
-            xlim([0,obj.map.size.horiz])
-            ylim([0,obj.map.size.vert])
-        end
-
-        % Main animation update (rename to updateUAVAnimation?)
-        function updateAnimation(UASTrail, UASHead, UASPos)
-            set(UASTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
-            set(UASHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
-        end
-
-        function updateSensedLocations(sensedPos, UASSensed)
-            set(UASSensed, 'XData', sensedPos(:, 1), 'YData', sensedPos(:, 2))
-        end
-
-        function animateAssetDestroyed(target)
-            plot(target(1), target(2), 'Marker', 'x', 'Color', 'r', 'MarkerSize', 20, 'LineWidth', 2, 'DisplayName', "Asset Destroyed")
-        end
-
-        function animateUAVDestroyed(position)
-            plot(position(1), position(2), 'Marker', 'x', 'Color', 'g', 'MarkerSize', 12)
-        end
-
     end
 end

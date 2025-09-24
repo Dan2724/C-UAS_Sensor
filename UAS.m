@@ -19,7 +19,11 @@ classdef UAS < handle
         function obj = linearMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time)
             obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
             obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
-
+            obj.targetUnitVector = ([xtarget, ytarget] - [xPos0, yPos0]) / norm([xtarget, ytarget] - [xPos0, yPos0]);
+            obj.position.xPos = xPos + obj.speed*time*obj.targetUnitVector(1);
+            obj.position.yPos = yPos + obj.speed*time*obj.targetUnitVector(2);
+            obj.position.dxPos = abs(xtarget - xPos);
+            obj.position.dyPos = abs(ytarget - yPos);
         end
 
         function obj = searchMotion(obj,xPos0,yPos0,xPos,yPos,xtarget,ytarget,time,assets)
