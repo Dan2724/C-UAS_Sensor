@@ -18,13 +18,13 @@ NFZ1 = polyshape([8, 25, 42, 44, 12], [91, 72, 89, 66, 70]);                % cr
 
 AOR = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);                        % define AOR within greater map using polyshape fxn: ([x1, x2, x3, x4], [y1, y2, y3, y4])
 
-%sim = simulator(map, AOR, UAS1, [sensor1], [asset1], 0.05, 0, NFZ1);       % example of creating sim object in simulator.m:  (map, AOR, UASs, Assets, Dt, Animate T/F, NFZs)
+%sim = simulator(map, AOR, UAS1, [sensor1], [asset1], 0.05, 0, NFZ1);       % example of creating sim object in simulator.m:  (Map, AOR, UASs, Sensors, Assets, tps=20, aniamte=true, nfzs=[], resetGraphics=true, animationMultiplier=100)
 
 results = zeros(100, 1);                                                    % preallocate results vector (1 = kill, 0 = no kill, [2 = NFZ hit])
 
 for i = 1:height(entrances)                                                 % run sim for every UAS entrance location and record kill/nokill/NFZincursion in results vector                                           
-    sim = simulator(map, AOR, UAS(15, entrances(i, :), asset1.location, 'Linear'), [sensor1, sensor2], [asset1, asset2], tps=20, animate=true, nfzs=NFZ1, resetGraphics=true, animationMultiplier=10);
-    results(i,1) = sim.runSim();
+    sim = simulator(map, AOR, UAS(15, entrances(i, :), asset1.location, 'Search'), [sensor1, sensor2], [asset1, asset2], tps=20, animate=true, nfzs=NFZ1, resetGraphics=false, animationMultiplier=100);
+    results = sim.runSim();
 end
      
 DP = (sum(results, 'all')/height(results))*100;                             % calculate and display detection probability
