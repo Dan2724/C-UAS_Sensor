@@ -16,6 +16,7 @@ classdef simulator
         NFZs
         resetGraphics
         animationMultiplier
+        hideClock
     end
 
     methods
@@ -32,6 +33,7 @@ classdef simulator
                 options.nfzs polyshape = polyshape.empty                   % This is where you declare any NFZs you want, should you decide to do so
                 options.resetGraphics logical = true                       % This will reset all graphics if used over multiple iterations FOR THE SAME MAP! As such, default is true
                 options.animationMultiplier double = 1                     % Animation speed multiplier, default 1x
+                options.hideClock logical = false                          % Set true if you want to hide the clock
             end
             obj.map = map;
             obj.AOR = aor;
@@ -45,6 +47,7 @@ classdef simulator
             obj.NFZs = options.nfzs;
             obj.resetGraphics = options.resetGraphics;
             obj.animationMultiplier = options.animationMultiplier;
+            obj.hideClock = options.hideClock;
         end
 
         function results = runSim(obj)
@@ -62,10 +65,11 @@ classdef simulator
                 if obj.resetGraphics
                     obj.map.wipeAnimation()
                 end
-                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors);
+                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, obj.hideClock);
             end
 
             while eventExitBounds == 0
+                time = obj.tick/obj.tps;
                 if obj.animate
                     pause(obj.dt/obj.animationMultiplier)
                 end
@@ -91,7 +95,6 @@ classdef simulator
                     results.UASSensedPos = sensed;
                     results.UASSensed = 1;
                     if obj.animate
-                        obj.map.updateUASAnimation(UASPos)
                         obj.map.updateSensedLocations(sensed(:, 2:3))
                     end
                 elseif eventAsset == 1 % Asset attacked
@@ -99,22 +102,24 @@ classdef simulator
                         results.destroyedAssets(end + 1) = asset;
                         if obj.animate
                             obj.map.animateDestroyedAssets(obj.assets, results.destroyedAssets);
-                            obj.map.updateUASAnimation(UASPos)
                         end
                         break
                     end
                 elseif eventNFZ == 1 % UAS entered NFZ
                     if obj.animate
                         obj.map.animateUASDestroyed(UASPos(end, :))
-                        obj.map.updateUASAnimation(UASPos)
                     end
                     results.NFZEntered = true;
                     break
                 else % UAS is safe
-                    if obj.animate
-                        obj.map.updateUASAnimation(UASPos)
+                end
+                if obj.animate
+                    obj.map.updateUASAnimation(UASPos)
+                    if obj.hideClock == false
+                        obj.map.updateClock(time)
                     end
                 end
+
 
                 obj.tick = obj.tick + 1; % Progress time
             end
