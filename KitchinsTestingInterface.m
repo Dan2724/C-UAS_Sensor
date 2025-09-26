@@ -8,7 +8,7 @@ asset1 = asset([30,60]);                                                    % cr
 asset2 = asset([60,45]);
 
 sensorLocations = sensorPosnsGenerator(20, 100, 2);                         % create matrix of every possible sensor location combination using sensorPosnGenerator function:  (sensorResolution, mapSize, numSensors)
-sensorRange = 10
+sensorRange = 10;
 entrances = ingressPosns(100, 100);                                         % use ingressPosns.m function to make entrances = [x1, y1; x2, y2; etc.]
 
 %UAS1 = UAS(15, [80, 0], asset1.location, 'Linear');                        % example of creating UAS object in UAS.m:   (speed, entrance, target, mode)
