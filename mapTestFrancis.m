@@ -5,7 +5,7 @@ close all
 map = map(100, 100); % Define map and size (vertical, horizontal)
 
 asset1 = asset([45,35]); % Define asset and location (x, y)
-asset2 = asset([60,45]);
+asset2 = asset([50,40]);
 
 sensor1 = sensor([25, 25], 15); % Define sensor(s)
 sensor2 = sensor([75, 75], 15); % Define sensor(s)

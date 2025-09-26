@@ -76,7 +76,7 @@ classdef simulator
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(end, 1),UASPos(end, 2),obj.dt);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets);
+                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets, results.destroyedAssets);
                 end
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);

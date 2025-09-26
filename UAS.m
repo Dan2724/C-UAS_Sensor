@@ -22,12 +22,20 @@ classdef UAS < handle
 
         end
 
-        function obj = searchMotion(obj,xPos,yPos,time,assets)
-            for n = 1:length(assets)                                        % Determine if the asset is in range of the UAS
+        function obj = searchMotion(obj,xPos,yPos,time,assets,destroyedAssets)
+            for n = 1:length(assets)
+                % Determine if the asset is in range of the UAS
                 assetDistance(n) = norm([xPos, yPos] - assets(n).location);
 
             end
-            [distance, idx] = min(assetDistance);                           % Determine which asset is closer if more than one is in range
+
+            assetDistance(destroyedAssets) = 1000;
+
+            [distance, idx] = min(assetDistance);
+
+            if idx == destroyedAssets
+
+            end
 
             if distance <= 20
                 turnRadius = distance/2;
@@ -35,6 +43,7 @@ classdef UAS < handle
                 if angleVelo > 1
                     angleVelo = 1; % sets max angular velocity of UAS
                 end
+
                 angle = angleVelo*time; % need to adust time fuction
                 assetLocation = assets(idx).location - [obj.position.xPos, obj.position.yPos];
 
