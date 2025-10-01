@@ -71,12 +71,12 @@ classdef simulator
                     pause(obj.dt/obj.animationMultiplier)
                 end
                 if obj.UAS.mode == 'Linear'
-                    obj.UAS.linearMotion(UASPos(end, 1),UASPos(end, 2),obj.dt);
+                    obj.UAS.linearMotion(obj.dt);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets, destroyedAssets,obj.tick);
+                    obj.UAS.searchMotion(obj.dt,obj.assets, results.destroyedAssets);
                 end
 
-                UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
+                UASPos = cat(1, UASPos, obj.UAS.position);
 
                 % Check for any logical events
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
