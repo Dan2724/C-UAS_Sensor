@@ -51,13 +51,13 @@ classdef simulator
         end
 
         function results = runSim(obj)
-            destroyedAssets = []; % Initialize assets destroyed
-            UASSensed = 0; % Initialize UAS sensed count
-            NFZEntered = false; % Initialize NFZ entry status
-            lastTick = false;
-            UASSensedPos = [];
+            destroyedAssets = [];                                          % Initialize assets destroyed
+            UASSensed = 0;                                                 % Initialize UAS sensed count
+            NFZEntered = false;                                            % Initialize NFZ entry status
+            lastTick = false;                                              % Initialize lastTick to be set true when simulation should end
+            UASSensedPos = [];                                             % Initialize matrix to track all positions in which the UAS is sensed
             UASPos = [obj.UAS.position(1), obj.UAS.position(2)];           % This matrix tracks all current and previous UAS positions
-
+            
             if obj.animate == true
                 if obj.resetGraphics
                     obj.map.wipeAnimation()
@@ -65,17 +65,17 @@ classdef simulator
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, obj.hideClock);
             end
 
+            % Generate Sensor Contours
+
             while lastTick == false
-                time = obj.tick/obj.tps;
-                if obj.animate
-                    pause(obj.dt/obj.animationMultiplier)
-                end
+                % Determine new UAS Position
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(obj.dt);
                 elseif obj.UAS.mode == 'Search'
                     obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
                 end
-
+                
+                % Update local UASPos 
                 UASPos = cat(1, UASPos, obj.UAS.position);
 
                 % Check for any logical events
@@ -83,6 +83,7 @@ classdef simulator
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
+                
 
                 if eventSensor == 1 % UAS sensed
                     UASSensedPos = cat(1, UASSensedPos, [obj.tick*obj.tps/60, UASPos(end, :)]);
@@ -117,10 +118,13 @@ classdef simulator
                 % Determine UAS Track
 
                 % Determine if UAS can be destroyed
-
+                
+                % Update Animation
                 if obj.animate
+                    pause(obj.dt/obj.animationMultiplier)
                     obj.map.updateUASAnimation(UASPos)
                     if obj.hideClock == false
+                        time = obj.tick/obj.tps;
                         obj.map.updateClock(time)
                     end
                 end
