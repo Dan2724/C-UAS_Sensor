@@ -59,7 +59,7 @@ classdef simulator
 
             eventExitBounds = 0;
             sensed = [];
-            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
+            UASPos = [obj.UAS.position(1), obj.UAS.position(2)];           % This matrix tracks all current and previous UAS positions
 
             if obj.animate == true
                 if obj.resetGraphics
@@ -74,12 +74,12 @@ classdef simulator
                     pause(obj.dt/obj.animationMultiplier)
                 end
                 if obj.UAS.mode == 'Linear'
-                    obj.UAS.linearMotion(UASPos(end, 1),UASPos(end, 2),obj.dt);
+                    obj.UAS.linearMotion(obj.dt);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets, results.destroyedAssets,obj.tick);
+                    obj.UAS.searchMotion(obj.dt,obj.assets, results.destroyedAssets,obj.tick);
                 end
 
-                UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
+                UASPos = cat(1, UASPos, obj.UAS.position);
 
                 % Check for any logical events
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
