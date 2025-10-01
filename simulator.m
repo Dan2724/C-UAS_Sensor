@@ -73,7 +73,7 @@ classdef simulator
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(obj.dt);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(obj.dt,obj.assets, results.destroyedAssets);
+                    obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
                 end
 
                 UASPos = cat(1, UASPos, obj.UAS.position);
@@ -83,8 +83,6 @@ classdef simulator
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
-
-                results.tick = obj.tick;
 
                 if eventSensor == 1 % UAS sensed
                     UASSensedPos = cat(1, UASSensedPos, [obj.tick*obj.tps/60, UASPos(end, :)]);
@@ -139,6 +137,7 @@ classdef simulator
             results.UASSensed = UASSensed; % Initialize UAS sensed count
             results.UASSensedPos = UASSensedPos;
             results.NFZEntered = NFZEntered; % Initialize NFZ entry status
+            results.tick = obj.tick;
         end
 
         function [event, sensor] = checkSensorCollision(obj, pos)

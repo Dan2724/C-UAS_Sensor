@@ -26,7 +26,7 @@ DPperCombo = zeros(height(sensorLocations), 1);
 for j = 1:height(sensorLocations)
     sensor1 = sensor([sensorLocations(j, 1), sensorLocations(j, 2)], sensorRange);   % create sensor object(s) in sensor.m:  ([x, y], range)
     sensor2 = sensor([sensorLocations(j, 3), sensorLocations(j, 4)], sensorRange);
-    for i = 1:height(entrances)                                             % run sim for every UAS entrance location and record kill/nokill/NFZincursion in results vector                                           
+    parfor i = 1:height(entrances)                                             % run sim for every UAS entrance location and record kill/nokill/NFZincursion in results vector                                           
         sim = simulator(map, AOR, UAS(15, entrances(i, :), asset1.location, 'Linear'), [sensor1, sensor2], [asset1], tps=20, animate=false, nfzs=NFZ1, resetGraphics=false, animationMultiplier=100);
         myResults(i) = sim.runSim.UASSensed();
     end
