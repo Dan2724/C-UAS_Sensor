@@ -8,7 +8,9 @@ classdef UAS < handle
         rangeHistory
 
         obstacles
-        lock
+        destroyedAssets
+        totalAssets
+        tempSpeed
 
     end
 
@@ -18,6 +20,7 @@ classdef UAS < handle
             obj.position = entrance;
             obj.target = target;
             obj.mode = mode;
+            obj.tempSpeed = speed;
             obj.targetUnitVector = (obj.target - obj.position)/norm(obj.target - obj.position);
 
         end
@@ -29,9 +32,11 @@ classdef UAS < handle
 
         function obj = searchMotion(obj,time,assets,destroyedAssets)
             obj.obstacles.assets = assets;
+            obj.totalAssets = length(obj.obstacles.assets);
+            obj.destroyedAssets = destroyedAssets;
 
-            if ~isempty(destroyedAssets)
-                obj.obstacles.assets(destroyedAssets) = [];
+            if ~isempty(obj.destroyedAssets)
+                obj.obstacles.assets(obj.destroyedAssets) = [];
 
             end
 
@@ -42,8 +47,7 @@ classdef UAS < handle
 
             [assetDistance, assetNumber] = min(assetDistance);
 
-            if assetDistance <= 20
-
+            if assetDistance <= 50
                 obj.assetFound(assetDistance,assetNumber,time)
 
             else
@@ -54,25 +58,24 @@ classdef UAS < handle
 
         function assetFound(obj,assetDistance,assetNumber,time)
             turnRadius = assetDistance/2;
-            angleVelo = obj.speed/turnRadius;
-            if angleVelo > 1
-                angleVelo = 1;
-            end
-
-            angle = angleVelo*time;
             assetLocation = obj.obstacles.assets(assetNumber).location - obj.position;
-
             turnAngle = acos(dot(obj.targetUnitVector,assetLocation)/(norm(obj.targetUnitVector)*norm(assetLocation)));
             rotDir = cross([obj.targetUnitVector,0],[obj.position,0]-[obj.obstacles.assets(assetNumber).location,0]);
+            angleVelo = (sin(turnAngle)*obj.speed)/turnRadius;
+
+            % if angleVelo > 1
+            %     angleVelo = 1;
+            % 
+            % end
+
+            angle = angleVelo*time;
 
             if abs(turnAngle) > 0.1
                 obj.turnMotion(angle,rotDir,time)
 
             else
-                obj.position = obj.position + obj.speed*time*obj.targetUnitVector;
-
+                obj.position = obj.position + obj.tempSpeed*time*obj.targetUnitVector;
             end
-
         end
 
         function turnMotion(obj,angle,rotDir,time)
@@ -82,7 +85,8 @@ classdef UAS < handle
                 DCM = [cos(-angle) -sin(-angle);sin(-angle) cos(-angle)];
             end
             obj.targetUnitVector = (DCM*obj.targetUnitVector')';
-            obj.position = obj.position + obj.speed*time*obj.targetUnitVector;
+
+            obj.position = obj.position + obj.tempSpeed*time*obj.targetUnitVector;
 
         end
     end
