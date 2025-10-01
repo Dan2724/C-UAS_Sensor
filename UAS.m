@@ -6,6 +6,7 @@ classdef UAS < handle
         mode
         position
         targetUnitVector
+        rangeHistory
     end
     methods
         function obj = UAS(speed, entrance, target, mode)
@@ -22,7 +23,7 @@ classdef UAS < handle
 
         end
 
-        function obj = searchMotion(obj,xPos,yPos,time,assets,destroyedAssets)
+        function obj = searchMotion(obj,xPos,yPos,time,assets,destroyedAssets,tick)
             for n = 1:length(assets)
                 % Determine if the asset is in range of the UAS
                 assetDistance(n) = norm([xPos, yPos] - assets(n).location);
@@ -30,12 +31,14 @@ classdef UAS < handle
             end
 
             assetDistance(destroyedAssets) = 1000;
-
             [distance, idx] = min(assetDistance);
+            % obj.rangeHistory(tick + 1) = distance;
+            % 
+            % if obj.rangeHistory(end) > obj.rangeHistory(end-1)
+            %     obj.speed = obj.speed - 1;
+            % end
 
-            if idx == destroyedAssets
 
-            end
 
             if distance <= 20
                 turnRadius = distance/2;
@@ -43,6 +46,7 @@ classdef UAS < handle
                 if angleVelo > 1
                     angleVelo = 1; % sets max angular velocity of UAS
                 end
+
 
                 angle = angleVelo*time; % need to adust time fuction
                 assetLocation = assets(idx).location - [obj.position.xPos, obj.position.yPos];
