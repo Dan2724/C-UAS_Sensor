@@ -51,14 +51,11 @@ classdef simulator
         end
 
         function results = runSim(obj)
-            results.UASPos = [];
-            results.destroyedAssets = []; % Initialize assets destroyed
-            results.UASSensed = 0; % Initialize UAS sensed count
-            results.NFZEntered = false; % Initialize NFZ entry status
-
-
-            eventExitBounds = 0;
-            sensed = [];
+            destroyedAssets = []; % Initialize assets destroyed
+            UASSensed = 0; % Initialize UAS sensed count
+            NFZEntered = false; % Initialize NFZ entry status
+            lastTick = false;
+            UASSensedPos = [];
             UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
 
             if obj.animate == true
@@ -68,7 +65,7 @@ classdef simulator
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, obj.hideClock);
             end
 
-            while eventExitBounds == 0
+            while lastTick == false
                 time = obj.tick/obj.tps;
                 if obj.animate
                     pause(obj.dt/obj.animationMultiplier)
@@ -76,7 +73,7 @@ classdef simulator
                 if obj.UAS.mode == 'Linear'
                     obj.UAS.linearMotion(UASPos(end, 1),UASPos(end, 2),obj.dt);
                 elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets, results.destroyedAssets,obj.tick);
+                    obj.UAS.searchMotion(UASPos(end, 1),UASPos(end, 2),obj.dt,obj.assets, destroyedAssets,obj.tick);
                 end
 
                 UASPos = cat(1, UASPos, [obj.UAS.position.xPos, obj.UAS.position.yPos]);
@@ -87,32 +84,42 @@ classdef simulator
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
 
-                results.UASPos = UASPos;
                 results.tick = obj.tick;
 
                 if eventSensor == 1 % UAS sensed
-                    sensed = cat(1, sensed, [obj.tick*obj.tps/60, UASPos(end, :)]);
-                    results.UASSensedPos = sensed;
-                    results.UASSensed = 1;
+                    UASSensedPos = cat(1, UASSensedPos, [obj.tick*obj.tps/60, UASPos(end, :)]);
+                    UASSensed = 1;
                     if obj.animate
-                        obj.map.updateSensedLocations(sensed(:, 2:3))
+                        obj.map.updateSensedLocations(UASSensedPos(:, 2:3))
                     end
-                elseif eventAsset == 1 % Asset attacked
-                    if ~any(results.destroyedAssets == asset)
-                        results.destroyedAssets(end + 1) = asset;
+                end
+
+                if eventAsset == 1 % Asset attacked
+                    if ~any(destroyedAssets == asset)
+                        destroyedAssets(end + 1) = asset;
                         if obj.animate
-                            obj.map.animateDestroyedAssets(obj.assets, results.destroyedAssets);
+                            obj.map.animateDestroyedAssets(obj.assets, destroyedAssets);
                         end
-                        
+                        lastTick = true;
                     end
-                elseif eventNFZ == 1 % UAS entered NFZ
+                end
+
+                if eventNFZ == 1 % UAS entered NFZ
                     if obj.animate
                         obj.map.animateUASDestroyed(UASPos(end, :))
                     end
-                    results.NFZEntered = true;
-                    break
-                else % UAS is safe
+                    NFZEntered = true;
+                    lastTick = true;
                 end
+
+                if eventExitBounds == true % UAS Left the map
+                    lastTick = true;
+                end
+
+                % Determine UAS Track
+
+                % Determine if UAS can be destroyed
+
                 if obj.animate
                     obj.map.updateUASAnimation(UASPos)
                     if obj.hideClock == false
@@ -120,19 +127,22 @@ classdef simulator
                     end
                 end
 
-
                 obj.tick = obj.tick + 1; % Progress time
             end
+
+            % Clean Sim
+            
+
+            % Prepare Results
+            results.UASPos = UASPos;
+            results.destroyedAssets = destroyedAssets; % Initialize assets destroyed
+            results.UASSensed = UASSensed; % Initialize UAS sensed count
+            results.UASSensedPos = UASSensedPos;
+            results.NFZEntered = NFZEntered; % Initialize NFZ entry status
         end
 
         function [event, sensor] = checkSensorCollision(obj, pos)
             % Sensor collision detection
-            % Inputs:
-            %   pos - A 2-element vector representing the position to check
-            % Outputs:
-            %   event - 1 if a collision is detected, 0 otherwise
-            %   sensor - Index of the sensor that detected the collision, or 0 if none
-
             event = 0; % Initialize event to no collision
             sensor = 0; % Initialize sensor index
 
@@ -175,12 +185,13 @@ classdef simulator
         end
 
         function [event] = checkOutOfBounds(~, pos, size)
+            % Check is UAS is out-of-bounds
             if pos(1) < 0 || pos(1) > size.vert
-                event = 1;
+                event = true;
             elseif pos(2) < 0 || pos(2) > size.horiz
-                event = 1;
+                event = true;
             else
-                event = 0;
+                event = false;
             end
         end
     end
