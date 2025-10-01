@@ -68,15 +68,17 @@ classdef simulator
             % Generate Sensor Contours
 
             while lastTick == false
-                % Determine new UAS Position
-                if obj.UAS.mode == 'Linear'
-                    obj.UAS.linearMotion(obj.dt);
-                elseif obj.UAS.mode == 'Search'
-                    obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
+                if obj.tick ~= 0
+                    % Determine new UAS Position
+                    if obj.UAS.mode == "Linear"
+                        obj.UAS.linearMotion(obj.dt);
+                    elseif obj.UAS.mode == "Search"
+                        obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
+                    end
+
+                    % Update local UASPos
+                    UASPos = cat(1, UASPos, obj.UAS.position);
                 end
-                
-                % Update local UASPos 
-                UASPos = cat(1, UASPos, obj.UAS.position);
 
                 % Check for any logical events
                 [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
