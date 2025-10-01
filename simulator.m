@@ -56,7 +56,7 @@ classdef simulator
             NFZEntered = false; % Initialize NFZ entry status
             lastTick = false;
             UASSensedPos = [];
-            UASPos = [obj.UAS.entrance(1), obj.UAS.entrance(2)];           % This matrix tracks all current and previous UAS positions
+            UASPos = [obj.UAS.position(1), obj.UAS.position(2)];           % This matrix tracks all current and previous UAS positions
 
             if obj.animate == true
                 if obj.resetGraphics
