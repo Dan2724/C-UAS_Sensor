@@ -57,36 +57,45 @@ classdef simulator
             lastTick = false;                                              % Initialize lastTick to be set true when simulation should end
             UASSensedPos = [];                                             % Initialize matrix to track all positions in which the UAS is sensed
             UASPos = [obj.UAS.position(1), obj.UAS.position(2)];           % This matrix tracks all current and previous UAS positions
+            P = [];
+
+            % Generate Sensor Contours
+            for i = 1:length(obj.sensors)
+                obj.sensors(i).createAttenuationMap()
+                [xg, yg, Pmap] = obj.sensors(i).createSensorContours(obj.map.size);
+                obj.sensors(i).xg = xg;
+                obj.sensors(i).yg = yg;
+                obj.sensors(i).P = P;
+                P_all(:,:,i) = Pmap;
+            end
+
+            P = 1 - prod(1 - P_all, 3);
             
             if obj.animate == true
                 if obj.resetGraphics
                     obj.map.wipeAnimation()
                 end
-                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, obj.hideClock);
+                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, P, obj.hideClock);
             end
 
-            % Generate Sensor Contours
-            for i = 1:length(obj.sensors)
-                
-            end
-
+            % Time loop
             while lastTick == false
                 if obj.tick ~= 0
                     % Determine new UAS Position
-                    if obj.UAS.mode == "Linear"
-                        obj.UAS.linearMotion(obj.dt);
-                    elseif obj.UAS.mode == "Search"
-                        obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
-                    else
-                        error("Improperly defined UAS mode. Simulation terminating.") % Move this check and error to UAS initialization???
+                    switch obj.UAS.mode
+                        case "Linear"
+                            obj.UAS.linearMotion(obj.dt);
+                        case "Search"
+                            obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
+                        otherwise
+                            error("Improperly defined UAS mode. Simulation terminating.") % Move this check and error to UAS initialization???
                     end
-
                     % Update local UASPos
                     UASPos = cat(1, UASPos, obj.UAS.position);
                 end
 
                 % Check for any logical events
-                [eventSensor] = obj.checkSensorCollision(UASPos(end, :));
+                [eventSensor] = obj.checkSensorCollision(UASPos(end, :), P);
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
@@ -151,18 +160,13 @@ classdef simulator
             results.tick = obj.tick;
         end
 
-        function [event, sensor] = checkSensorCollision(obj, pos)
+        function [event] = checkSensorCollision(obj, pos, P)
             % Sensor collision detection
             event = 0; % Initialize event to no collision
-            sensor = 0; % Initialize sensor index
-
-            for i = 1:length(obj.sensors)
-                r = [pos(1), pos(2)] - obj.sensors(i).location;
-                if norm(r) <= obj.sensors(i).range
-                    event = 1; % Collision detected
-                    sensor = i; % Store the index of the colliding sensor
-                    return; % Exit the function early
-                end
+            chance = P(round(pos(1)) + 1, round(pos(2)) + 1);
+            if chance >= rand(1)
+                event = 1; % Collision detected
+                return; % Exit the function early
             end
         end
 

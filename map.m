@@ -29,7 +29,7 @@ classdef map < handle
         end
 
         % Initialize animation
-        function startAnimation(obj, AOR, assets, NFZs, sensors, hideClock)
+        function startAnimation(obj, AOR, assets, NFZs, sensors, P, hideClock)
             obj.displayMap
             
             obj.UASTrail = plot(NaN, NaN, 'Color', 'r', 'DisplayName', "UAS Trail");
@@ -43,6 +43,24 @@ classdef map < handle
             axesMatch = findobj(axesChildren, 'DisplayName', "AOR");       % I, Daniel Burns, do recognize that this is quite possibly the worst way to make this check.
 
             if isempty(axesMatch)
+
+                % Plot sensors
+                for i = 1:length(sensors)
+                    x = sensors(i).location(1);
+                    y = sensors(i).location(2);
+                    r = sensors(i).range;
+
+                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
+                        'Curvature', [1 1], ...
+                        'FaceColor', 'c', ...
+                        'EdgeColor', 'c', ...
+                        'LineStyle', '--', ...
+                        'FaceAlpha', 0.05)
+                    plot(x, y, '.', 'Color', 'c', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
+                end
+                contourf(sensors(1).xg, sensors(1).yg, P, 0.1:0.05:0.9, 'FaceAlpha', 0.1, 'LineStyle', 'none');
+                colorbar;
+
                 % Plot AOR
                 plot(AOR, 'FaceColor', 'white', 'FaceAlpha', 0.05, 'DisplayName', "AOR");
 
@@ -60,21 +78,6 @@ classdef map < handle
                     for i = 1:length(NFZs)
                         obj.NFZs = plot(NFZs(i), 'FaceColor', 'y', 'FaceAlpha', 0.2, 'EdgeColor', 'y', 'DisplayName', "NFZ " + i);
                     end
-                end
-
-                % Plot sensors
-                for i = 1:length(sensors)
-                    x = sensors(i).location(1);
-                    y = sensors(i).location(2);
-                    r = sensors(i).range;
-
-                    rectangle('Position',[x-r, y-r, 2*r, 2*r], ...
-                        'Curvature', [1 1], ...
-                        'FaceColor', 'c', ...
-                        'EdgeColor', 'c', ...
-                        'LineStyle', '--', ...
-                        'FaceAlpha', 0.05)
-                    plot(x, y, '.', 'Color', 'c', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
                 end
             end
 

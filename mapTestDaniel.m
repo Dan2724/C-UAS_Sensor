@@ -7,8 +7,11 @@ map = map(100, 100); % Define map and size (vertical, horizontal)
 asset1 = asset([55,40]); % Define asset and location (x, y)
 asset2 = asset([60,45]);
 
-sensor1 = sensor([25, 25], 15); % Define sensor(s)
-sensor2 = sensor([75, 75], 15);
+params.d50 = 10;
+params.k = 10;
+
+sensor1 = sensor([25, 25], params.d50, "logistic", params, 1, 0, 360); % Define sensor(s)
+sensor2 = sensor([75, 75], params.d50, "logistic", params, 1, 0, 360);
 
 UAS1 = UAS(18, [0, 0], asset2.location, 'Linear'); % Define UAS
 
