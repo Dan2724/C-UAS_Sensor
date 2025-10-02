@@ -61,7 +61,7 @@ classdef simulator
 
             % Generate Sensor Contours
             for i = 1:length(obj.sensors)
-                obj.sensors(i).createAttenuationMap()
+                obj.sensors(i).createAttenuationMap();
                 [xg, yg, Pmap] = obj.sensors(i).createSensorContours(obj.map.size);
                 obj.sensors(i).xg = xg;
                 obj.sensors(i).yg = yg;
@@ -95,7 +95,7 @@ classdef simulator
                 end
 
                 % Check for any logical events
-                [eventSensor] = obj.checkSensorCollision(UASPos(end, :), P);
+                [eventSensor] = obj.checkSensorDetection(UASPos(end, :), P);
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
@@ -160,7 +160,7 @@ classdef simulator
             results.tick = obj.tick;
         end
 
-        function [event] = checkSensorCollision(obj, pos, P)
+        function [event] = checkSensorDetection(~, pos, P)
             % Sensor collision detection
             event = 0; % Initialize event to no collision
             chance = P(round(pos(1)) + 1, round(pos(2)) + 1);
