@@ -6,6 +6,8 @@ classdef map < handle
         UASSensed
         UASDestroyed
         assetDestroyed
+        assets
+        NFZs
         timeBox
     end
     methods
@@ -50,13 +52,13 @@ classdef map < handle
 
                 % Plot assets
                 for i = 1:length(assets)
-                    plot(assets(i).location(1), assets(i).location(2), 'Marker', 'square', 'Color', 'g', 'MarkerSize', 10, 'LineWidth', 2, 'LineStyle','none' , 'DisplayName', "Asset " + i);
+                    obj.assets = plot(assets(i).location(1), assets(i).location(2), 'Marker', 'square', 'Color', 'g', 'MarkerSize', 10, 'LineWidth', 2, 'LineStyle','none' , 'DisplayName', "Asset " + i);
                 end
 
                 % Plot NFZs
                 if isempty(NFZs) == 0
                     for i = 1:length(NFZs)
-                        plot(NFZs(i), 'FaceColor', 'y', 'FaceAlpha', 0.2, 'EdgeColor', 'y', 'DisplayName', "NFZ " + i);
+                        obj.NFZs = plot(NFZs(i), 'FaceColor', 'y', 'FaceAlpha', 0.2, 'EdgeColor', 'y', 'DisplayName', "NFZ " + i);
                     end
                 end
 

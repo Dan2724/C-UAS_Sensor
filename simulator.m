@@ -66,6 +66,9 @@ classdef simulator
             end
 
             % Generate Sensor Contours
+            for i = 1:length(obj.sensors)
+                
+            end
 
             while lastTick == false
                 if obj.tick ~= 0
@@ -74,6 +77,8 @@ classdef simulator
                         obj.UAS.linearMotion(obj.dt);
                     elseif obj.UAS.mode == "Search"
                         obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets);
+                    else
+                        error("Improperly defined UAS mode. Simulation terminating.") % Move this check and error to UAS initialization???
                     end
 
                     % Update local UASPos
