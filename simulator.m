@@ -52,10 +52,9 @@ classdef simulator
 
         function results = runSim(obj)
             destroyedAssets = [];                                          % Initialize assets destroyed
-            UASSensed = 0;                                                 % Initialize UAS sensed count
+            UASSensed = [];                                                % Initialize UAS sensed count
             NFZEntered = false;                                            % Initialize NFZ entry status
             lastTick = false;                                              % Initialize lastTick to be set true when simulation should end
-            UASSensedPos = [];                                             % Initialize matrix to track all positions in which the UAS is sensed
             UASPos = [obj.UAS.position(1), obj.UAS.position(2)];           % This matrix tracks all current and previous UAS positions
             P = [];
 
@@ -95,19 +94,15 @@ classdef simulator
                 end
 
                 % Check for any logical events
-                [eventSensor] = obj.checkSensorDetection(UASPos(end, :), P);
+                [detectionProbability] = obj.getDetectionProbability(UASPos(end, :), P);
                 [eventAsset,  asset] = obj.checkAssetCollision(UASPos(end, :), obj.UAS.speed*obj.dt);
                 [eventNFZ] = obj.checkNFZCollision(UASPos(end, :));
                 [eventExitBounds] = obj.checkOutOfBounds(UASPos(end, :), obj.map.size);
                 
 
-                if eventSensor == 1 % UAS sensed
-                    UASSensedPos = cat(1, UASSensedPos, [obj.tick*obj.tps/60, UASPos(end, :)]);
-                    UASSensed = 1;
-                    if obj.animate
-                        obj.map.updateSensedLocations(UASSensedPos(:, 2:3))
-                    end
-                end
+                
+                UASSensed = cat(1, UASSensed, [obj.tick*obj.tps/60, UASPos(end, :), detectionProbability]);
+                
 
                 if eventAsset == 1 % Asset attacked
                     if ~any(destroyedAssets == asset)
@@ -155,19 +150,14 @@ classdef simulator
             results.UASPos = UASPos;
             results.destroyedAssets = destroyedAssets; % Initialize assets destroyed
             results.UASSensed = UASSensed; % Initialize UAS sensed count
-            results.UASSensedPos = UASSensedPos;
             results.NFZEntered = NFZEntered; % Initialize NFZ entry status
             results.tick = obj.tick;
         end
 
-        function [event] = checkSensorDetection(~, pos, P)
-            % Sensor collision detection
-            event = 0; % Initialize event to no collision
-            chance = P(round(pos(1)) + 1, round(pos(2)) + 1);
-            if chance >= rand(1)
-                event = 1; % Collision detected
-                return; % Exit the function early
-            end
+        function [probability] = getDetectionProbability(~, pos, P)
+            % Sensor detection probability
+            probability = P(round(pos(1)) + 1, round(pos(2)) + 1);
+
         end
 
         function [event, asset] = checkAssetCollision(obj, pos, deltaPos)
