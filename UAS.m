@@ -5,7 +5,7 @@ classdef UAS < handle
         mode
         position
         targetUnitVector
-        rangeHistory
+        range
 
         obstacles
         destroyedAssets
@@ -30,8 +30,12 @@ classdef UAS < handle
 
         end
 
-        function obj = searchMotion(obj,time,assets,destroyedAssets)
+        function obj = searchMotion(obj,time,assets,destroyedAssets,NFZs)
+            obj.range = 20;
+            obj.obstacles.NFZs = NFZs;
             obj.obstacles.assets = assets;
+            obj.avoidNFZ
+
             obj.totalAssets = length(obj.obstacles.assets);
             obj.destroyedAssets = destroyedAssets;
 
@@ -40,19 +44,20 @@ classdef UAS < handle
 
             end
 
-            for n = 1:length(obj.obstacles.assets)
-                assetDistance(n) = norm(obj.position - obj.obstacles.assets(n).location);
+            if ~isempty(obj.obstacles.assets)
+                for n = 1:length(obj.obstacles.assets)
+                    assetDistance(n) = norm(obj.position - obj.obstacles.assets(n).location);
 
-            end
+                end
+                [assetDistance, assetNumber] = min(assetDistance);
 
-            [assetDistance, assetNumber] = min(assetDistance);
+                if assetDistance <= obj.range
+                    obj.assetFound(assetDistance,assetNumber,time)
 
-            if assetDistance <= 50
-                obj.assetFound(assetDistance,assetNumber,time)
+                else
+                    obj.position = obj.position + obj.speed*time*obj.targetUnitVector;
 
-            else
-                obj.position = obj.position + obj.speed*time*obj.targetUnitVector;
-
+                end
             end
         end
 
@@ -87,6 +92,20 @@ classdef UAS < handle
             obj.targetUnitVector = (DCM*obj.targetUnitVector')';
 
             obj.position = obj.position + obj.tempSpeed*time*obj.targetUnitVector;
+
+        end
+
+        function avoidNFZ(obj)
+            if isinterior(obj.obstacles.NFZs,obj.position + obj.targetUnitVector*obj.range)
+                angle = linspace(-pi/4,pi/4,100);
+                for n = 1:length(angle)
+                    check = obj.position' + [cos(-angle(n)) -sin(-angle(n));sin(-angle(n)) cos(-angle(n))]*obj.targetUnitVector'*obj.range;
+                    options(n,:) = check';
+
+                end
+                crash = find(isinterior(obj.obstacles.NFZs,options)== true)
+
+            end
 
         end
     end

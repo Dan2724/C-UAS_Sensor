@@ -65,10 +65,23 @@ classdef simulator
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, obj.hideClock);
             end
 
+<<<<<<< Updated upstream
             % Generate Sensor Contours
             for i = 1:length(obj.sensors)
                 
             end
+=======
+            while lastTick == false
+                time = obj.tick/obj.tps;
+                if obj.animate
+                    pause(obj.dt/obj.animationMultiplier)
+                end
+                if obj.UAS.mode == 'Linear'
+                    obj.UAS.linearMotion(obj.dt);
+                elseif obj.UAS.mode == 'Search'
+                    obj.UAS.searchMotion(obj.dt,obj.assets, destroyedAssets, obj.NFZs);
+                end
+>>>>>>> Stashed changes
 
             while lastTick == false
                 if obj.tick ~= 0
@@ -106,7 +119,7 @@ classdef simulator
                         if obj.animate
                             obj.map.animateDestroyedAssets(obj.assets, destroyedAssets);
                         end
-                        lastTick = true;
+                            lastTick = false;
                     end
                 end
 
