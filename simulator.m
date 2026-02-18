@@ -100,7 +100,10 @@ classdef simulator
                 costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
                 if ~isempty(obj.NFZs)
-                    [Xg, Yg] = meshgrid(xLimits(1):cellSize:xLimits(2), yLimits(1):cellSize:yLimits(2));
+                    % Sample interior points only (half-cell offset keeps boundary cells clear)
+                    xs = (xLimits(1) + cellSize/2) : cellSize : xLimits(2);
+                    ys = (yLimits(1) + cellSize/2) : cellSize : yLimits(2);
+                    [Xg, Yg] = meshgrid(xs, ys);
                     pts = [Xg(:), Yg(:)];
                     inNFZ = false(size(pts, 1), 1);
                     for nfzIdx = 1:length(obj.NFZs)
@@ -108,6 +111,14 @@ classdef simulator
                     end
                     if any(inNFZ)
                         setOccupancy(costMap, pts(inNFZ, :), 1);
+                    end
+                end
+
+                % Ensure each UAS start and goal cell is free (guards against edge/NFZ overlap)
+                for k = 1:length(obj.UAS)
+                    if obj.UAS(k).mode == "HybridAStar"
+                        setOccupancy(costMap, obj.UAS(k).position(1:2), 0);
+                        setOccupancy(costMap, obj.UAS(k).target(1:2),   0);
                     end
                 end
 

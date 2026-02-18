@@ -55,73 +55,91 @@ classdef UAS < handle
         end
 
         function hybridAStarMotion(obj, time, tick, turnRadius, costMap)
-            if ~obj.active
-                return;
-            end
+    if ~obj.active
+        return;
+    end
 
-            % Build planner on first call
-            if isempty(obj.planner)
-                ss = stateSpaceSE2;
-                ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
-                sv = validatorOccupancyMap(ss);
-                sv.Map = costMap;
+    % Build planner on first call
+    if isempty(obj.planner)
+        ss = stateSpaceSE2;
+        ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
+        sv = validatorOccupancyMap(ss);
+        sv.Map = costMap;
 
-                % InterpolationDistance must be > sqrt(2)*cellSize and <= sqrt(2)*cellSize*... 
-                % Use 3x cellSize to safely satisfy both bounds.
-                cellSize = costMap.Resolution^-1;  % Resolution is cells/unit, so cellSize = 1/Resolution
-                interpDist = max(obj.speed * time, sqrt(2) * cellSize * 1.1);
+        cellSize = 1 / costMap.Resolution;
+        interpDist = max(obj.speed * time, sqrt(2) * cellSize * 1.1);
 
-                obj.planner = plannerHybridAStar(sv, ...
-                    'MinTurningRadius', turnRadius, ...
-                    'InterpolationDistance', interpDist);
+        obj.planner = plannerHybridAStar(sv, ...
+            'MinTurningRadius', turnRadius, ...
+            'InterpolationDistance', interpDist);
 
-                % Plan initial path: start=[x y heading], goal=[tx ty heading_to_target]
-                goalHeading = atan2(obj.target(2) - obj.position(2), ...
-                                    obj.target(1) - obj.position(1));
-                refPath = plan(obj.planner, ...
-                    [obj.position(1:2), obj.heading], ...
-                    [obj.target(1:2),   goalHeading]);
-                obj.pathPoints   = refPath.States(:, 1:2);
-                obj.pathHeadings = refPath.States(:, 3);
-                obj.tickOffset   = tick - 1; % so that tick-tickOffset starts at 1
-            end
-
-            idx = tick - obj.tickOffset;
-
-            if idx >= 1 && idx <= size(obj.pathPoints, 1)
-                % Follow pre-planned path
-                pose = obj.pathPoints(idx, :);
-                obj.position = [pose(1), pose(2), obj.position(3)];
-                obj.heading  = obj.pathHeadings(idx);
-                % Keep targetUnitVector consistent for any code that reads it
-                obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
-
-            elseif idx > size(obj.pathPoints, 1)
-                % Reached end of planned path — replan toward nearest map boundary (escape)
-                posXY = obj.position(1:2);
-                posEsc = [costMap.XWorldLimits(1), posXY(2);  % left edge
-                          posXY(1), costMap.YWorldLimits(1);  % bottom edge
-                          costMap.XWorldLimits(2), posXY(2);  % right edge
-                          posXY(1), costMap.YWorldLimits(2)]; % top edge
-                [~, Iesc] = min(sum((posEsc - posXY).^2, 2));
-                obj.target = posEsc(Iesc, :);
-
-                goalHeading = atan2(obj.target(2) - posXY(2), ...
-                                    obj.target(1) - posXY(1));
-                refPath = plan(obj.planner, ...
-                    [posXY, obj.heading], ...
-                    [obj.target, goalHeading]);
-                obj.pathPoints   = refPath.States(:, 1:2);
-                obj.pathHeadings = refPath.States(:, 3);
-                obj.tickOffset   = tick - 1;
-
-                % Take first step of new path immediately
-                pose = obj.pathPoints(1, :);
-                obj.position = [pose(1), pose(2), obj.position(3)];
-                obj.heading  = obj.pathHeadings(1);
-                obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
-            end
+        goalHeading = atan2(obj.target(2) - obj.position(2), ...
+                            obj.target(1) - obj.position(1));
+        try
+            refPath = plan(obj.planner, ...
+                [obj.position(1:2), obj.heading], ...
+                [obj.target(1:2),   goalHeading]);
+            obj.pathPoints   = refPath.States(:, 1:2);
+            obj.pathHeadings = refPath.States(:, 3);
+        catch
+            % No path found — fall back to linear motion toward target
+            obj.pathPoints   = [];
+            obj.pathHeadings = [];
         end
+        obj.tickOffset = tick - 1;
+    end
+
+    % If no path was ever found, move linearly
+    if isempty(obj.pathPoints)
+        obj.position = obj.position + obj.speed * time * obj.targetUnitVector;
+        return;
+    end
+
+    idx = tick - obj.tickOffset;
+
+    if idx >= 1 && idx <= size(obj.pathPoints, 1)
+        pose = obj.pathPoints(idx, :);
+        obj.position = [pose(1), pose(2), obj.position(3)];
+        obj.heading  = obj.pathHeadings(idx);
+        obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
+
+    elseif idx > size(obj.pathPoints, 1)
+        % Replan toward nearest map boundary, clamped inward by 1 cell
+        posXY  = obj.position(1:2);
+        xl     = costMap.XWorldLimits;
+        yl     = costMap.YWorldLimits;
+        margin = 1 / costMap.Resolution; % 1 cell inward
+        posEsc = [xl(1)+margin, posXY(2);
+                  posXY(1),     yl(1)+margin;
+                  xl(2)-margin, posXY(2);
+                  posXY(1),     yl(2)-margin];
+        [~, Iesc] = min(sum((posEsc - posXY).^2, 2));
+        obj.target = posEsc(Iesc, :);
+
+        goalHeading = atan2(obj.target(2) - posXY(2), ...
+                            obj.target(1) - posXY(1));
+        try
+            refPath = plan(obj.planner, ...
+                [posXY, obj.heading], ...
+                [obj.target, goalHeading]);
+            obj.pathPoints   = refPath.States(:, 1:2);
+            obj.pathHeadings = refPath.States(:, 3);
+        catch
+            % Replan failed — move linearly toward exit
+            obj.pathPoints   = [];
+            obj.pathHeadings = [];
+            obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
+            obj.position = obj.position + obj.speed * time * obj.targetUnitVector;
+            return;
+        end
+        obj.tickOffset = tick - 1;
+
+        pose = obj.pathPoints(1, :);
+        obj.position = [pose(1), pose(2), obj.position(3)];
+        obj.heading  = obj.pathHeadings(1);
+        obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
+    end
+end
 
         function searchMotion(obj, time, assets, destroyedAssets, NFZs)
             if ~obj.active
