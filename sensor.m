@@ -25,24 +25,35 @@ classdef sensor
             obj.beamwidth = beamwidth;
         end
 
-        function [xg, yg, P] = createSensorContours(obj, mapSize, nfzs)
+        function [xg, yg, P] = createSensorContours(obj, mapSize, nfzs, allSensors)
             % createSensorContours  Compute per-cell detection probability.
             %
             %   [xg, yg, P] = createSensorContours(obj, mapSize)
             %   [xg, yg, P] = createSensorContours(obj, mapSize, nfzs)
+            %   [xg, yg, P] = createSensorContours(obj, mapSize, nfzs, allSensors)
             %
-            %   nfzs  – array of polyshape objects (NFZs).  Any grid cell
-            %           whose line-of-sight to the sensor is blocked by at
-            %           least one NFZ has its probability multiplied by
-            %           NFZ_ATTENUATION (default 0.1), modelling signal
-            %           blockage by buildings / dense vegetation.
+            %   nfzs       – polyshape array.  Grid cells whose LOS to the
+            %                sensor is blocked are attenuated by NFZ_ATTENUATION.
+            %
+            %   allSensors – array of sensor objects (including this one).
+            %                Nearby sensors cause co-channel interference that
+            %                reduces detection probability.
 
-            if nargin < 3
-                nfzs = polyshape.empty;
-            end
+            if nargin < 3; nfzs       = polyshape.empty; end
+            if nargin < 4; allSensors = sensor.empty;    end
 
-            % Attenuation factor applied when LOS passes through an NFZ.
-            NFZ_ATTENUATION = 0.1;
+            NFZ_ATTENUATION = 0.1;  % probability multiplier when LOS blocked by NFZ
+
+            % ------------------------------------------------------------------
+            % Interference parameters
+            %   r_int  – distance at which interference is ~60 % of maximum
+            %            (set equal to d50 so sensors within detection range
+            %             of each other interfere significantly)
+            %   k_int  – strength: 1.0 means one full-power neighbour at
+            %            distance 0 halves the detection probability
+            % ------------------------------------------------------------------
+            r_int = obj.params.d50;
+            k_int = 1.0;
 
             [xg, yg] = meshgrid(0:1:mapSize.horiz, 0:1:mapSize.vert);
             dx = xg - obj.location(1);
@@ -70,49 +81,56 @@ classdef sensor
                 gain      = exp(-0.5 * (da ./ sigma_ang).^2);
             end
 
+            % --- Co-channel interference from neighbouring sensors ---
+            % For each other sensor j, compute how much it interferes with
+            % this sensor at every grid point.  Interference is strongest
+            % when j is physically close to this sensor (small d_ij) and
+            % falls off as a Gaussian in sensor-to-sensor distance.
+            % The result is a scalar per sensor pair — it does not depend on
+            % the grid point — so we compute it once and apply uniformly.
+            if ~isempty(allSensors) && length(allSensors) > 1
+                totalInterference = 0;
+                for j = 1:length(allSensors)
+                    % Skip self
+                    if isequal(allSensors(j).location, obj.location)
+                        continue;
+                    end
+                    d_ij = norm(allSensors(j).location - obj.location);
+                    totalInterference = totalInterference + ...
+                        exp(-(d_ij^2) / (2 * r_int^2));
+                end
+                % attenuation in (0, 1]: 1 = no interference, →0 = full interference
+                interferenceAttenuation = 1 / (1 + k_int * totalInterference);
+                Pd = Pd .* interferenceAttenuation;
+            end
+
             % --- NFZ line-of-sight attenuation ---
-            % For each grid point, test whether the straight line from the
-            % sensor to that point intersects any NFZ polygon edge.  This is
-            % a simple "is the path blocked?" check — no exponential decay,
-            % just a binary multiply by NFZ_ATTENUATION.
             if ~isempty(nfzs)
                 sx = obj.location(1);
                 sy = obj.location(2);
 
-                % Flatten grid so we can loop efficiently
-                rows = size(xg, 1);
-                cols = size(xg, 2);
+                rows  = size(xg, 1);
+                cols  = size(xg, 2);
                 xFlat = xg(:);
                 yFlat = yg(:);
                 blocked = false(numel(xFlat), 1);
 
                 for n = 1:length(nfzs)
-                    % polyshape vertices for this NFZ
-                    vx = nfzs(n).Vertices(:, 1);
-                    vy = nfzs(n).Vertices(:, 2);
+                    vx   = nfzs(n).Vertices(:, 1);
+                    vy   = nfzs(n).Vertices(:, 2);
                     numV = length(vx);
 
-                    % Edges of the polygon: (vx(j),vy(j)) -> (vx(j+1),vy(j+1))
                     for j = 1:numV
                         j2  = mod(j, numV) + 1;
                         ex1 = vx(j);  ey1 = vy(j);
                         ex2 = vx(j2); ey2 = vy(j2);
-
-                        % Segment-segment intersection:
-                        % Ray from (sx,sy) to (gx,gy); edge from (ex1,ey1) to (ex2,ey2).
-                        % Use parametric form and solve 2x2 system.
-                        % d_ray = [gx-sx, gy-sy], d_edge = [ex2-ex1, ey2-ey1]
-                        % t in [0,1] => hit on ray, u in [0,1] => hit on edge.
-                        % Exclude t=0 (the sensor itself) with t > 1e-6.
 
                         dgx = xFlat - sx;
                         dgy = yFlat - sy;
                         dex = ex2 - ex1;
                         dey = ey2 - ey1;
 
-                        denom = dgx .* dey - dgy .* dex;  % cross product
-
-                        % Parallel rays — no intersection
+                        denom = dgx .* dey - dgy .* dex;
                         valid = abs(denom) > 1e-10;
 
                         t = ((ex1 - sx) .* dey - (ey1 - sy) .* dex) ./ denom;
@@ -123,7 +141,6 @@ classdef sensor
                     end
                 end
 
-                % Apply attenuation mask
                 attenuationMask = ones(numel(xFlat), 1);
                 attenuationMask(blocked) = NFZ_ATTENUATION;
                 attenuationMask = reshape(attenuationMask, rows, cols);

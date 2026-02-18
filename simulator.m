@@ -58,6 +58,25 @@ classdef simulator
                 sensorD50  = arrayfun(@(s) s.params.d50, obj.sensors);
                 sensorK    = arrayfun(@(s) s.params.k,   obj.sensors);
                 sensorLocs = reshape([obj.sensors.location], 2, [])';
+
+                % --- Pre-compute per-sensor interference attenuation ---
+                % Same model as in createSensorContours: each sensor's
+                % detection probability is scaled down by co-channel
+                % interference from its neighbours.
+                r_int = sensorD50;   % per-sensor bandwidth parameter
+                k_int = 1.0;
+                numSensors = length(obj.sensors);
+                interferenceAtten = ones(numSensors, 1);
+                for si = 1:numSensors
+                    totalInterference = 0;
+                    for sj = 1:numSensors
+                        if si == sj; continue; end
+                        d_ij = norm(sensorLocs(si,:) - sensorLocs(sj,:));
+                        totalInterference = totalInterference + ...
+                            exp(-(d_ij^2) / (2 * r_int(si)^2));
+                    end
+                    interferenceAtten(si) = 1 / (1 + k_int * totalInterference);
+                end
             end
 
             % --- Asset setup ---
@@ -69,7 +88,6 @@ classdef simulator
             numUAS     = length(obj.UAS);
             uas_active = true(numUAS, 1);
 
-            % Detection score: running sum of per-tick detection probabilities
             detectionScore  = zeros(numUAS, 1);
             destroyedAssets = [];
             outcomeLog      = strings(0);
@@ -110,8 +128,9 @@ classdef simulator
                 end
                 P = zeros(obj.map.size.vert + 1, obj.map.size.horiz + 1);
                 for s = 1:length(obj.sensors)
-                    % Pass NFZs so contour plot reflects LOS attenuation
-                    [~, ~, Ps] = obj.sensors(s).createSensorContours(obj.map.size, obj.NFZs);
+                    % Pass NFZs and full sensor array for interference
+                    [~, ~, Ps] = obj.sensors(s).createSensorContours( ...
+                        obj.map.size, obj.NFZs, obj.sensors);
                     P = P + Ps;
                 end
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, P, obj.hideClock);
@@ -138,16 +157,14 @@ classdef simulator
                         obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
                     end
 
-                    % 2. SENSOR DETECTION — accumulate detection score.
-                    % Check LOS to each sensor: if the straight line from the
-                    % UAS position to the sensor passes through an NFZ, apply
-                    % the same attenuation factor used in the contour map.
+                    % 2. SENSOR DETECTION — accumulate detection score
+                    % Apply interference attenuation before accumulating dp
                     if hasSensors
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + ...
                                       (sensorLocs(:,2) - pos(2)).^2);
                         dp = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
 
-                        % Attenuate dp for sensors whose LOS is blocked by an NFZ
+                        % NFZ LOS attenuation
                         if ~isempty(obj.NFZs)
                             for si = 1:length(obj.sensors)
                                 if losBlockedByNFZ(pos(1:2), sensorLocs(si,:), obj.NFZs)
@@ -155,6 +172,9 @@ classdef simulator
                                 end
                             end
                         end
+
+                        % Co-channel interference attenuation
+                        dp = dp .* interferenceAtten;
 
                         detectionScore(i) = detectionScore(i) + sum(dp);
                     end
@@ -208,9 +228,6 @@ classdef simulator
     end
 end
 
-% -------------------------------------------------------------------------
-% Local helper: returns true if the straight line from point A to point B
-% is intersected by any edge of any NFZ polygon.
 % -------------------------------------------------------------------------
 function blocked = losBlockedByNFZ(A, B, nfzs)
     blocked = false;
