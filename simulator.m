@@ -94,14 +94,18 @@ classdef simulator
             if hasHybridAStar
                 xLimits = [0, obj.map.size.horiz];
                 yLimits = [0, obj.map.size.vert];
-                costMap = occupancyMap(obj.map.size.vert, obj.map.size.horiz, 1);
+
+                % Use cellSize=2 so that MotionPrimitiveLength constraint is
+                % satisfied: must be <= sqrt(2)*cellSize ≈ 2.83.
+                % Speed=18, dt=1/20 → InterpolationDistance=0.9, well within limit.
+                cellSize = 2;
+                costMap = occupancyMap(obj.map.size.vert, obj.map.size.horiz, 1/cellSize);
                 costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
-                % Mark NFZ cells as occupied
+                % Mark NFZ cells as occupied — loop over each polyshape individually
                 if ~isempty(obj.NFZs)
-                    [Xg, Yg] = meshgrid(xLimits(1):xLimits(2), yLimits(1):yLimits(2));
+                    [Xg, Yg] = meshgrid(xLimits(1):cellSize:xLimits(2), yLimits(1):cellSize:yLimits(2));
                     pts = [Xg(:), Yg(:)];
-                    % Check each NFZ polyshape individually and combine
                     inNFZ = false(size(pts, 1), 1);
                     for nfzIdx = 1:length(obj.NFZs)
                         inNFZ = inNFZ | isinterior(obj.NFZs(nfzIdx), pts);
@@ -111,7 +115,7 @@ classdef simulator
                     end
                 end
 
-                % Turning radius = speed * dt
+                % Turning radius and interpolation distance based on UAS speed
                 haModes          = arrayfun(@(u) u.mode == "HybridAStar", obj.UAS);
                 hybridSpeeds     = arrayfun(@(u) u.speed, obj.UAS(haModes));
                 hybridTurnRadius = min(hybridSpeeds) * dt_local;

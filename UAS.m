@@ -65,9 +65,15 @@ classdef UAS < handle
                 ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
                 sv = validatorOccupancyMap(ss);
                 sv.Map = costMap;
+
+                % InterpolationDistance must be > sqrt(2)*cellSize and <= sqrt(2)*cellSize*... 
+                % Use 3x cellSize to safely satisfy both bounds.
+                cellSize = costMap.Resolution^-1;  % Resolution is cells/unit, so cellSize = 1/Resolution
+                interpDist = max(obj.speed * time, sqrt(2) * cellSize * 1.1);
+
                 obj.planner = plannerHybridAStar(sv, ...
                     'MinTurningRadius', turnRadius, ...
-                    'InterpolationDistance', obj.speed * time);
+                    'InterpolationDistance', interpDist);
 
                 % Plan initial path: start=[x y heading], goal=[tx ty heading_to_target]
                 goalHeading = atan2(obj.target(2) - obj.position(2), ...
