@@ -18,7 +18,7 @@ classdef simulator
         hideClock
         fadePings
         costConfig
-        effectors3D 
+        effectors3D
     end
 
     methods
@@ -37,22 +37,21 @@ classdef simulator
             obj.map = map; obj.AOR = aor; obj.UAS = uas; obj.effectors = effectors; obj.sensors = sensors; obj.assets = assets;
             obj.tick = 0; obj.tps = options.tps; obj.dt = 1 / obj.tps;
             obj.animate = options.animate; obj.NFZs = options.nfzs; obj.resetGraphics = options.resetGraphics;
-            obj.animationMultiplier = options.animationMultiplier; obj.hideClock = options.hideClock; obj.fadePings = options.fadePings; 
+            obj.animationMultiplier = options.animationMultiplier; obj.hideClock = options.hideClock; obj.fadePings = options.fadePings;
             obj.costConfig = options.costConfig;
-            
+
             % Initialize history for N UAS
             obj.UASPos_all = cell(1, length(obj.UAS));
             for i = 1:length(obj.UAS)
-                obj.UASPos_all{i} = obj.UAS(i).position
+                obj.UASPos_all{i} = obj.UAS(i).position;
             end
-        
+
             if ~isempty(obj.effectors)
                 numEff = length(obj.effectors);
-                obj.effectors3D = zeros(numEff, 3);
+                obj.effectors3D = zeros(numEff, 2); % 2D only — no terrain on this branch
                 for k = 1:numEff
                     loc = obj.effectors(k).location;
-                    z = obj.map.getElevation(loc(1), loc(2));
-                    obj.effectors3D(k, :) = [loc(1), loc(2), z];
+                    obj.effectors3D(k, :) = [loc(1), loc(2)];
                 end
             end
         end
@@ -60,160 +59,182 @@ classdef simulator
         function results = runSim(obj)
             dt_local = obj.dt;
             cost_eff = obj.costConfig.effector; cost_leak = obj.costConfig.leak; cost_asset = obj.costConfig.asset;
-            
+
+            % --- Sensor setup (logistic sensor objects: params has d50 and k) ---
             hasSensors = ~isempty(obj.sensors);
             if hasSensors
-                p = [obj.sensors.params]; 
-                sensorD50 = [p.d50]; sensorK = [p.k];
-                req_pings = p(1).pings; 
-                scan_rate = p(1).scanRate;
-                sensorLocs = reshape([obj.sensors.location], 2, [])'; 
-            else
-                scan_rate = 1;
+                sensorD50  = arrayfun(@(s) s.params.d50, obj.sensors);
+                sensorK    = arrayfun(@(s) s.params.k,   obj.sensors);
+                sensorLocs = reshape([obj.sensors.location], 2, [])';
             end
 
+            % --- Effector setup ---
             hasEffectors = ~isempty(obj.effectors3D);
             if hasEffectors
-                effLocs = obj.effectors3D;
+                effLocs   = obj.effectors3D; % [x, y]
                 effRanges = [obj.effectors.range]';
             end
-            
+
+            % --- Asset setup ---
             hasAssets = ~isempty(obj.assets);
             if hasAssets
-                assetLocs = reshape([obj.assets.location], 2, [])'; 
+                assetLocs = reshape([obj.assets.location], 2, [])';
             end
-            
-            terrainProxy = obj.map.terrainProxy;
-            numUAS = length(obj.UAS);
-            uas_active = true(numUAS, 1);
-            
-            track_hist = zeros(numUAS, req_pings); 
 
-            destroyedAssets = []; cost = 0; UASkilled = 0; outcomeLog = strings(0); 
-            
+            numUAS    = length(obj.UAS);
+            uas_active = true(numUAS, 1);
+
+            destroyedAssets = []; cost = 0; UASkilled = 0; outcomeLog = strings(0);
+            UASSensed = zeros(0, 3); % [time, x, y]
+
+            % -------------------------------------------------------
+            % Build occupancy costMap for Hybrid A* (built once here)
+            % -------------------------------------------------------
+            hasHybridAStar = any(arrayfun(@(u) u.mode == "HybridAStar", obj.UAS));
+            if hasHybridAStar
+                xLimits = [0, obj.map.size.horiz];
+                yLimits = [0, obj.map.size.vert];
+                % Use finer resolution (10 cells/unit) to reduce CellSize
+                % This allows MotionPrimitiveLength to fit in valid range
+                costMap = occupancyMap(obj.map.size.vert, obj.map.size.horiz, 10);
+                costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
+
+                % Mark NFZ cells as occupied
+                if ~isempty(obj.NFZs)
+                    cellSize = 1 / costMap.Resolution;  % CellSize = 0.1 for resolution 10
+                    [Xg, Yg] = meshgrid(xLimits(1):cellSize:xLimits(2), yLimits(1):cellSize:yLimits(2));
+                    pts = [Xg(:), Yg(:)];
+                    % Check each NFZ polyshape individually and combine
+                    inNFZ = false(size(pts, 1), 1);
+                    for nfzIdx = 1:length(obj.NFZs)
+                        inNFZ = inNFZ | isinterior(obj.NFZs(nfzIdx), pts);
+                    end
+                    if any(inNFZ)
+                        setOccupancy(costMap, pts(inNFZ, :), 1);
+                    end
+                end
+
+                % Turning radius = speed * dt
+                haModes          = arrayfun(@(u) u.mode == "HybridAStar", obj.UAS);
+                hybridSpeeds     = arrayfun(@(u) u.speed, obj.UAS(haModes));
+                hybridTurnRadius = min(hybridSpeeds) * dt_local;
+            end
+            % -------------------------------------------------------
+
             % Initialize Graphics
             animate_on = obj.animate;
             if animate_on
                 if obj.resetGraphics
                     obj.map.wipeAnimation();
                 end
-                % Pass number of UAS to map
-                obj.map.startAnimation(obj.AOR, obj.assets, obj.effectors, obj.sensors, numUAS, obj.hideClock);
+                % Compute combined sensor probability map for display
+                P = zeros(obj.map.size.vert + 1, obj.map.size.horiz + 1);
+                for s = 1:length(obj.sensors)
+                    [~, ~, Ps] = obj.sensors(s).createSensorContours(obj.map.size);
+                    P = P + Ps;
+                end
+                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, P, obj.hideClock);
                 UASsensedPos = [];
             end
-            
+
             simComplete = false; tick_count = 0;
-            
+
             while ~simComplete
-                simComplete = true; 
+                simComplete = true;
                 tick_count = tick_count + 1;
                 currentTime = tick_count * dt_local;
-                
-                % check sensor scan tick
-                timeSinceLastScan = mod(currentTime, scan_rate);
-                isScanTick = (timeSinceLastScan < dt_local/2) || (abs(timeSinceLastScan - scan_rate) < dt_local/2);
-                
+
                 for i = 1:numUAS
                     if ~uas_active(i)
                         continue;
                     end
                     simComplete = false;
-                    
+
                     % 1. MOVE UAS
                     uasObj = obj.UAS(i);
                     if uasObj.mode == "Linear"
                         uasObj.linearMotion(dt_local);
                     elseif uasObj.mode == "Search"
                         uasObj.searchMotion(dt_local, obj.assets, destroyedAssets, obj.NFZs);
+                    elseif uasObj.mode == "HybridAStar"
+                        uasObj.hybridAStarMotion(dt_local, tick_count, hybridTurnRadius, costMap);
                     end
-                    pos = uasObj.position;
-                    
+                    pos = uasObj.position; % [x, y, z] but z=0 on this branch
+
                     if animate_on
                         obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
                     end
-                    
-                    % 2. CHECK SENSOR TRACKING
-                    isTracked = false;
+
+                    % 2. CHECK SENSOR DETECTION (logistic model, fires every tick)
                     isPinged = false;
-                    
-                    if hasSensors && isScanTick
+                    if hasSensors
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + (sensorLocs(:,2) - pos(2)).^2);
-                        raw_probs = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
-                        probs = min(raw_probs, 0.90); % Cap probability at 90%
-                        
+                        probs  = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
                         if any(probs >= rand(size(probs)))
                             isPinged = true;
                         end
-                        
-                        track_hist(i, :) = [track_hist(i, 2:end), isPinged];
                     end
-                    
-                    if sum(track_hist(i,:)) >= req_pings
-                        isTracked = true;
+
+                    if isPinged
+                        UASSensed(end+1, :) = [currentTime, pos(1), pos(2)];
+                        if animate_on
+                            UASsensedPos = cat(1, UASsensedPos, pos(1:2));
+                            obj.map.updateSensedLocations(UASsensedPos);
+                        end
                     end
-                    
-                    if isPinged && animate_on
-                         UASsensedPos = cat(1, UASsensedPos, [currentTime, pos]);
-                         obj.map.animateUASsensed(UASsensedPos);
-                    end
-                    
+
                     % 3. CHECK COLLISIONS
                     eventEffector = false;
-                    if isTracked && hasEffectors
-                        d_eff = sqrt(sum((effLocs - pos).^2, 2));
+                    if hasEffectors
+                        d_eff = sqrt((effLocs(:,1) - pos(1)).^2 + (effLocs(:,2) - pos(2)).^2);
                         if any(d_eff <= effRanges); eventEffector = true; end
                     end
-                    
+
                     eventAsset = false; hitAssetID = 0;
                     if hasAssets
                         d_asset = sqrt((assetLocs(:,1) - pos(1)).^2 + (assetLocs(:,2) - pos(2)).^2);
-                        hitIdx = find(d_asset <= (uasObj.speed * dt_local)); 
+                        hitIdx = find(d_asset <= (uasObj.speed * dt_local));
                         if ~isempty(hitIdx); eventAsset = true; hitAssetID = hitIdx(1); end
                     end
-                    
-                    z_terr = terrainProxy(pos(2), pos(1)); 
-                    eventCrash = (pos(3) <= z_terr);
-                    
+
+                    % No terrain on this branch — skip crash check
                     eventExit = (pos(1) < 0 || pos(1) > obj.map.size.horiz || pos(2) < 0 || pos(2) > obj.map.size.vert);
 
                     if eventEffector
                         cost = cost + cost_eff; outcomeLog(end+1) = "Intercept";
                         uasObj.active = false; uas_active(i) = false; UASkilled = UASkilled + 1;
-                        if animate_on; obj.map.animateUASkilled(pos); end
-                        
-                    elseif eventCrash
-                        cost = cost + cost_leak; outcomeLog(end+1) = "TerrainCrash";
-                        uasObj.active = false; uas_active(i) = false;
-                        if animate_on; obj.map.animateUAScrashed(pos); end
-                        
+                        if animate_on; obj.map.animateUASDestroyed(pos); end
+
                     elseif eventExit
                         cost = cost + cost_leak; outcomeLog(end+1) = "Escaped";
                         uasObj.active = false; uas_active(i) = false;
-                        
+
                     elseif eventAsset
                         if ~any(destroyedAssets == hitAssetID)
                             destroyedAssets(end+1) = hitAssetID;
                             cost = cost + cost_asset; outcomeLog(end+1) = "AssetHit";
                             if animate_on; obj.map.animateDestroyedAssets(obj.assets, destroyedAssets); end
-                            simComplete = true; 
+                            simComplete = true;
                         end
                     end
-                end 
-                
-                % 3. UPDATE ANIMATION
+                end
+
+                % 4. UPDATE ANIMATION
                 if animate_on
-                    pause(dt_local/obj.animationMultiplier);
-                    obj.map.updateUASAnimation(obj.UASPos_all);
+                    pause(dt_local / obj.animationMultiplier);
+                    % updateUASAnimation expects a position matrix, pass last UAS position
+                    obj.map.updateUASAnimation(obj.UASPos_all{1});
                     if ~obj.hideClock; obj.map.updateClock(currentTime); end
                 end
             end
-            
-            results.UASPos_all = obj.UASPos_all;
-            results.destroyedAssets = destroyedAssets; 
-            results.cost = cost; 
-            results.UASkilled = UASkilled;
-            results.outcomeLog = outcomeLog;
-            results.tick = tick_count;
+
+            results.UASPos_all      = obj.UASPos_all;
+            results.UASSensed       = UASSensed;       % [time, x, y] — used by TestingInterface line 42
+            results.destroyedAssets = destroyedAssets;
+            results.cost            = cost;
+            results.UASkilled       = UASkilled;
+            results.outcomeLog      = outcomeLog;
+            results.tick            = tick_count;
         end
     end
 end
