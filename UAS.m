@@ -30,6 +30,49 @@ classdef UAS < handle
 
         end
 
+        function hybridAStarMotion(obj, time, tick, turnRadius, costMap)
+            if obj.active
+                if isempty(obj.planner)
+                    ss = stateSpaceSE2;
+                    ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
+                    sv = validatorOccupancyMap(ss);
+                    sv.Map = costMap;
+                    %show(costMap)
+                    obj.planner = plannerHybridAStar(sv, 'MinTurningRadius', turnRadius, "InterpolationDistance",obj.speed*time);
+                    % Plan initial path
+                    refPath = plan(obj.planner, [obj.position(1:2), obj.heading], [obj.target, obj.heading+pi/2]);
+                    obj.pathPoints = refPath.States(:, 1:2);  % Just x,y coordinates
+                    obj.pathHeadings = refPath.States(:,3);
+                    pts = refPath.States; % [x y theta]
+                end
+    
+                if tick-obj.tickOffset~=0
+                    if (tick - obj.tickOffset) <= length(obj.pathPoints(:,1))
+                        pose = obj.pathPoints(tick - obj.tickOffset,:);
+                        obj.position = [pose(1), pose(2), obj.position(3)];
+                        obj.heading = obj.pathHeadings(tick - obj.tickOffset);
+                        
+      
+                    else %reached end of path, now escape
+                        positionxy = [obj.position(1), obj.position(2)];
+                        posEsc = [costMap.XWorldLimits(1), obj.position(2); obj.position(1), costMap.YWorldLimits(1); costMap.XWorldLimits(2), obj.position(2); obj.position(1), costMap.YWorldLimits(2)];
+                        [~, Iesc] = min(sum((posEsc - positionxy).^2, 2));
+                        obj.target = posEsc(Iesc, :);
+                        refPath = plan(obj.planner, [positionxy, obj.heading], [obj.target, obj.heading]);
+                        obj.pathPoints = refPath.States(:, 1:2);  % Just x,y coordinates
+                        pts = refPath.States; % [x y theta]
+                        %plot(pts(:,1), pts(:,2), 'g--', 'LineWidth', 2);
+                        obj.tickOffset = tick-1;
+                        pose = obj.pathPoints(tick - obj.tickOffset,:);
+                        obj.position = [pose(1), pose(2), obj.position(3)];
+                        obj.pathHeadings = refPath.States(:,3);
+                    end
+                else
+                    obj.position = obj.position;
+                end
+            end
+        end
+
         function obj = searchMotion(obj,time,assets,destroyedAssets)
             obj.obstacles.assets = assets;
             obj.totalAssets = length(obj.obstacles.assets);
