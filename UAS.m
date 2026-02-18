@@ -55,20 +55,32 @@ classdef UAS < handle
                 sv = validatorOccupancyMap(ss);
                 sv.Map = costMap;
 
-                % ValidationDistance: check every 0.25 m along each motion
-                % primitive so no occupied cell can be skipped
+                % ValidationDistance: check every 0.25 m so no occupied
+                % cell can be skipped by a motion primitive
                 sv.ValidationDistance = 0.25;
 
-                % MotionPrimitiveLength: 3 m gives the planner enough
-                % resolution to thread through gaps while keeping search
-                % tractable on a 100x100 m map.
-                primLen    = 3.0;
-                interpDist = 0.25;   % interpolation finer than validation distance
+                % Build planner, setting MinTurningRadius FIRST.
+                % MotionPrimitiveLength must satisfy:
+                %   sqrt(2)*cellSize < primLen <= (pi/2)*MinTurningRadius
+                % With cellSize=0.5 and turnRadius>=1:
+                %   lower > 0.707,  upper = (pi/2)*turnRadius
+                % We pick primLen = 0.75 * (pi/2) * turnRadius, clamped
+                % above sqrt(2)*cellSize so it is always valid.
+                cellSize = 1 / costMap.Resolution;
+                minLen   = sqrt(2) * cellSize + 0.01;
+                maxLen   = (pi/2) * obj.turnRadius;
+                primLen  = max(minLen, 0.75 * maxLen);
+                interpDist = min(0.25, primLen * 0.5);
 
-                obj.planner = plannerHybridAStar(sv, ...
-                    'MinTurningRadius',      obj.turnRadius, ...
-                    'MotionPrimitiveLength', primLen, ...
-                    'InterpolationDistance', interpDist);
+                % Construct with ONLY the validator — no name-value pairs
+                % that could trigger validation before MinTurningRadius is set
+                obj.planner = plannerHybridAStar(sv);
+
+                % Now set properties in dependency order:
+                % MinTurningRadius first, then MotionPrimitiveLength
+                obj.planner.MinTurningRadius      = obj.turnRadius;
+                obj.planner.MotionPrimitiveLength  = primLen;
+                obj.planner.InterpolationDistance  = interpDist;
 
                 goalHeading = atan2(obj.target(2) - obj.position(2), ...
                                     obj.target(1) - obj.position(1));
