@@ -93,15 +93,19 @@ classdef simulator
             % --- Build occupancy map for Hybrid A* ---
             xLimits  = [0, obj.map.size.horiz];
             yLimits  = [0, obj.map.size.vert];
-            cellSize = 1;   % 1 m/cell gives finer resolution for obstacle avoidance
 
-            costMap = occupancyMap(yLimits(2), xLimits(2), 1/cellSize);
+            % Use 0.5 m/cell resolution. Finer cells mean NFZ edges are
+            % accurately represented without needing a separate inflate step.
+            cellSize = 0.5;
+            costMap = binaryOccupancyMap(yLimits(2), xLimits(2), 1/cellSize);
             costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
             if ~isempty(obj.NFZs)
-                % Sample at cell-centre resolution
-                xs = (xLimits(1) + cellSize/2) : cellSize : xLimits(2);
-                ys = (yLimits(1) + cellSize/2) : cellSize : yLimits(2);
+                % Sample every 0.25 m — well below cell size — so no edge
+                % cell is ever missed, including thin polygon boundaries.
+                sampleStep = cellSize / 2;
+                xs = xLimits(1) : sampleStep : xLimits(2);
+                ys = yLimits(1) : sampleStep : yLimits(2);
                 [Xg, Yg] = meshgrid(xs, ys);
                 pts = [Xg(:), Yg(:)];
                 inNFZ = false(size(pts, 1), 1);
@@ -111,14 +115,9 @@ classdef simulator
                 if any(inNFZ)
                     setOccupancy(costMap, pts(inNFZ, :), 1);
                 end
-
-                % ---- Inflate obstacles by UAS turn radius ----
-                % This ensures the planner keeps the UAS body clear of NFZ edges.
-                inflateRadius = obj.UAS(1).turnRadius;  % metres
-                inflate(costMap, inflateRadius);
             end
 
-            % Ensure UAS start and goal cells are free (after inflation)
+            % Ensure UAS start and goal cells are free
             for k = 1:length(obj.UAS)
                 setOccupancy(costMap, obj.UAS(k).position(1:2), 0);
                 setOccupancy(costMap, obj.UAS(k).target(1:2),   0);

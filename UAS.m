@@ -48,18 +48,22 @@ classdef UAS < handle
         function hybridAStarMotion(obj, time, tick, costMap)
             if ~obj.active; return; end
 
+            % Plan once on first call
             if isempty(obj.planner)
                 ss = stateSpaceSE2;
                 ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
                 sv = validatorOccupancyMap(ss);
                 sv.Map = costMap;
-                % Set ValidationDistance fine enough to catch obstacles
-                % Use half a cell size so every cell crossing is checked
-                cellSize = 1 / costMap.Resolution;
-                sv.ValidationDistance = cellSize * 0.5;
 
-                primLen    = sqrt(2) * cellSize + 0.01; % just above the minimum
-                interpDist = primLen * 0.9;             % must be <= primLen
+                % ValidationDistance: check every 0.25 m along each motion
+                % primitive so no occupied cell can be skipped
+                sv.ValidationDistance = 0.25;
+
+                % MotionPrimitiveLength: 3 m gives the planner enough
+                % resolution to thread through gaps while keeping search
+                % tractable on a 100x100 m map.
+                primLen    = 3.0;
+                interpDist = 0.25;   % interpolation finer than validation distance
 
                 obj.planner = plannerHybridAStar(sv, ...
                     'MinTurningRadius',      obj.turnRadius, ...
@@ -82,9 +86,8 @@ classdef UAS < handle
                 obj.tickOffset = tick - 1;
             end
 
+            % If planning failed, hold position — do NOT fly through NFZs
             if isempty(obj.pathPoints)
-                % Fallback: move linearly if planner failed
-                obj.position = obj.position + obj.speed * time * obj.targetUnitVector;
                 return;
             end
 
@@ -97,11 +100,11 @@ classdef UAS < handle
                 obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
 
             elseif idx > size(obj.pathPoints, 1)
-                % Replan toward nearest map boundary, clamped 1 cell inward
+                % Path exhausted — replan toward nearest map boundary
                 posXY  = obj.position(1:2);
                 xl     = costMap.XWorldLimits;
                 yl     = costMap.YWorldLimits;
-                margin = 1 / costMap.Resolution;
+                margin = 2.0;   % stay 2 m inside world limits
                 posEsc = [xl(1)+margin, posXY(2);
                           posXY(1),     yl(1)+margin;
                           xl(2)-margin, posXY(2);
@@ -118,10 +121,9 @@ classdef UAS < handle
                     obj.pathPoints   = refPath.States(:, 1:2);
                     obj.pathHeadings = refPath.States(:, 3);
                 catch
+                    % Hold position if replan also fails
                     obj.pathPoints   = [];
                     obj.pathHeadings = [];
-                    obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
-                    obj.position = obj.position + obj.speed * time * obj.targetUnitVector;
                     return;
                 end
                 obj.tickOffset = tick - 1;

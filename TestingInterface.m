@@ -23,7 +23,7 @@ AOR = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);
 params.d50 = 10;
 params.k   = 10;
 
-turnRadius = 5; % metres — configure UAS turn radius here
+turnRadius = 1; % metres — configure UAS turn radius here
 
 for i = 1:N
     sensor1 = sensor([rand()*100, rand()*100], params.d50, "logistic", params, 1, 0, 360);
