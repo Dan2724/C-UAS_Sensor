@@ -53,8 +53,11 @@ classdef UAS < handle
                 ss.StateBounds = [costMap.XWorldLimits; costMap.YWorldLimits; -pi pi];
                 sv = validatorOccupancyMap(ss);
                 sv.Map = costMap;
+                % Set ValidationDistance fine enough to catch obstacles
+                % Use half a cell size so every cell crossing is checked
+                cellSize = 1 / costMap.Resolution;
+                sv.ValidationDistance = cellSize * 0.5;
 
-                cellSize   = 1 / costMap.Resolution;
                 primLen    = sqrt(2) * cellSize + 0.01; % just above the minimum
                 interpDist = primLen * 0.9;             % must be <= primLen
 
@@ -71,7 +74,8 @@ classdef UAS < handle
                         [obj.target(1:2),   goalHeading]);
                     obj.pathPoints   = refPath.States(:, 1:2);
                     obj.pathHeadings = refPath.States(:, 3);
-                catch
+                catch ME
+                    warning('HA* planning failed: %s', ME.message);
                     obj.pathPoints   = [];
                     obj.pathHeadings = [];
                 end

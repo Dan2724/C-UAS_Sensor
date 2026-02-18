@@ -58,7 +58,15 @@ classdef map < handle
                         'FaceAlpha', 0.05)
                     plot(x, y, '.', 'Color', 'c', 'DisplayName', "Sensor " + i, 'MarkerSize', 20)
                 end
-                contourf(sensors(1).xg, sensors(1).yg, P, 0.1:0.05:0.9, 'FaceAlpha', 0.1, 'LineStyle', 'none');
+
+                % FIX: Build X/Y vectors directly from map size.
+                % createSensorContours uses meshgrid(0:1:horiz, 0:1:vert),
+                % producing P of size (vert+1) x (horiz+1).
+                % contourf needs matching 1-D vectors: X of length (horiz+1),
+                % Y of length (vert+1).
+                xVec = 0 : 1 : obj.size.horiz;   % 1 x (horiz+1)
+                yVec = 0 : 1 : obj.size.vert;     % 1 x (vert+1)
+                contourf(xVec, yVec, P, 0.1:0.05:0.9, 'FaceAlpha', 0.1, 'LineStyle', 'none');
                 colorbar;
 
                 % Plot AOR
@@ -81,11 +89,10 @@ classdef map < handle
                 end
             end
 
-            
-
             xlim([0,obj.size.horiz])
             ylim([0,obj.size.vert])
         end
+
         function updateUASAnimation(obj, UASPos)
             set(obj.UASTrail, 'XData', UASPos(:, 1), 'YData', UASPos(:, 2))
             set(obj.UASHead, 'XData', UASPos(end, 1), 'YData', UASPos(end, 2))
