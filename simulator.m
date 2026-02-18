@@ -94,13 +94,11 @@ classdef simulator
             if hasHybridAStar
                 xLimits  = [0, obj.map.size.horiz];
                 yLimits  = [0, obj.map.size.vert];
-                cellSize = 2; % metres per cell
+                cellSize = 2;
 
-                % Build occupancy map with explicit world limits
-                costMap = occupancyMap(yLimits(2), xLimits(2), 1/cellSize, 'local');
-                % 'local' frame: origin at (0,0), x right, y up — matches our coordinate system
+                costMap = occupancyMap(yLimits(2), xLimits(2), 1/cellSize);
+                costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
-                % Mark NFZ cells as occupied
                 if ~isempty(obj.NFZs)
                     [Xg, Yg] = meshgrid(xLimits(1):cellSize:xLimits(2), yLimits(1):cellSize:yLimits(2));
                     pts = [Xg(:), Yg(:)];
@@ -113,7 +111,6 @@ classdef simulator
                     end
                 end
 
-                % Turn radius: use 3x cell size (physically reasonable, avoids planner constraint violations)
                 hybridTurnRadius = 3 * cellSize;
             end
             % -------------------------------------------------------
