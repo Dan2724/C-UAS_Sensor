@@ -96,7 +96,8 @@ classdef simulator
                 yLimits = [0, obj.map.size.vert];
                 % Use finer resolution (10 cells/unit) to reduce CellSize
                 % This allows MotionPrimitiveLength to fit in valid range
-                costMap = occupancyMap(obj.map.size.vert, obj.map.size.horiz, 10);
+                % occupancyMap(width, height, resolution)
+                costMap = occupancyMap(obj.map.size.horiz, obj.map.size.vert, 10);
                 costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
                 % Mark NFZ cells as occupied

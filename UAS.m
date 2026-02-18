@@ -72,12 +72,14 @@ classdef UAS < handle
                 % Choose turnRadius as primitive length if in range, otherwise use safe default
                 cellSize = 1 / costMap.Resolution;
                 minPrimLength = sqrt(2) * cellSize;
-                maxPrimLength = 1.41;  % slightly below upper limit for safety
+                maxPrimLength = 1.41;  % Use 1.41 for safety margin below upper limit of 1.41372
                 
                 if turnRadius > minPrimLength && turnRadius <= maxPrimLength
                     motionPrimLength = turnRadius;
                 else
-                    motionPrimLength = max(minPrimLength + 0.01, min(turnRadius, maxPrimLength));
+                    % Use small margin above minimum if turnRadius is out of range
+                    margin = 0.01;
+                    motionPrimLength = max(minPrimLength + margin, min(turnRadius, maxPrimLength));
                 end
                 
                 obj.planner = plannerHybridAStar(sv, ...

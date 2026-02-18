@@ -41,5 +41,5 @@ for i = 1:N
 
     % UASSensed has 3 columns: [time, x, y]
     % Count number of detections
-    detectionProbability = size(results.UASSensed, 1);
+    numDetections = size(results.UASSensed, 1);
 end
