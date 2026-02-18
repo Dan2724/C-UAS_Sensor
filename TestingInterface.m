@@ -2,7 +2,7 @@ clc
 clear
 close all
 
-theMap = map(100, 100); % Renamed to avoid shadowing the map class
+theMap = map(100, 100);
 
 asset1 = asset([55, 40]);
 
@@ -15,6 +15,8 @@ AOR = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);
 
 params.d50 = 10;
 params.k   = 10;
+
+turnRadius = 5; % metres — configure UAS turn radius here
 
 for i = 1:N
     sensor1 = sensor([rand()*100, rand()*100], params.d50, "logistic", params, 1, 0, 360);
@@ -29,12 +31,12 @@ for i = 1:N
         case 4; dep = [100,        rand()*100];
     end
 
-    UAS1 = UAS(18, dep, asset1.location, 'HybridAStar');
+    UAS1 = UAS(18, dep, asset1.location, 'HybridAStar', turnRadius=turnRadius);
 
     sim = simulator(theMap, AOR, UAS1, [], [sensor1, sensor2, sensor3], [asset1], ...
         tps=20, animate=true, nfzs=[NFZ1, NFZ2], animationMultiplier=10, hideClock=false);
 
     results = sim.runSim();
 
-    detectionProbability = size(results.UASSensed, 1); % number of detection events
+    detectionProbability = size(results.UASSensed, 1);
 end

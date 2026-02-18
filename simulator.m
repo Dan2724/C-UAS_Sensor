@@ -100,7 +100,6 @@ classdef simulator
                 costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
                 if ~isempty(obj.NFZs)
-                    % Sample interior points only (half-cell offset keeps boundary cells clear)
                     xs = (xLimits(1) + cellSize/2) : cellSize : xLimits(2);
                     ys = (yLimits(1) + cellSize/2) : cellSize : yLimits(2);
                     [Xg, Yg] = meshgrid(xs, ys);
@@ -114,15 +113,12 @@ classdef simulator
                     end
                 end
 
-                % Ensure each UAS start and goal cell is free (guards against edge/NFZ overlap)
                 for k = 1:length(obj.UAS)
                     if obj.UAS(k).mode == "HybridAStar"
                         setOccupancy(costMap, obj.UAS(k).position(1:2), 0);
                         setOccupancy(costMap, obj.UAS(k).target(1:2),   0);
                     end
                 end
-
-                hybridTurnRadius = 3 * cellSize;
             end
             % -------------------------------------------------------
 
@@ -162,7 +158,7 @@ classdef simulator
                     elseif uasObj.mode == "Search"
                         uasObj.searchMotion(dt_local, obj.assets, destroyedAssets, obj.NFZs);
                     elseif uasObj.mode == "HybridAStar"
-                        uasObj.hybridAStarMotion(dt_local, tick_count, hybridTurnRadius, costMap);
+                        uasObj.hybridAStarMotion(dt_local, tick_count, costMap);
                     end
                     pos = uasObj.position; % [x, y, z] but z=0 on this branch
 
