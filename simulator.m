@@ -55,28 +55,11 @@ classdef simulator
             % --- Sensor setup ---
             hasSensors = ~isempty(obj.sensors);
             if hasSensors
+                numSensors = length(obj.sensors);
                 sensorD50  = arrayfun(@(s) s.params.d50, obj.sensors);
                 sensorK    = arrayfun(@(s) s.params.k,   obj.sensors);
                 sensorLocs = reshape([obj.sensors.location], 2, [])';
-
-                % --- Pre-compute per-sensor interference attenuation ---
-                % Same model as in createSensorContours: each sensor's
-                % detection probability is scaled down by co-channel
-                % interference from its neighbours.
-                r_int = sensorD50;   % per-sensor bandwidth parameter
-                k_int = 1.0;
-                numSensors = length(obj.sensors);
-                interferenceAtten = ones(numSensors, 1);
-                for si = 1:numSensors
-                    totalInterference = 0;
-                    for sj = 1:numSensors
-                        if si == sj; continue; end
-                        d_ij = norm(sensorLocs(si,:) - sensorLocs(sj,:));
-                        totalInterference = totalInterference + ...
-                            exp(-(d_ij^2) / (2 * r_int(si)^2));
-                    end
-                    interferenceAtten(si) = 1 / (1 + k_int * totalInterference);
-                end
+                k_int      = 3.0;
             end
 
             % --- Asset setup ---
@@ -88,13 +71,17 @@ classdef simulator
             numUAS     = length(obj.UAS);
             uas_active = true(numUAS, 1);
 
-            detectionScore  = zeros(numUAS, 1);
+            % Raw weighted score accumulator and tick counter per UAS.
+            % Final score = weightedScoreSum / tick_count  (Option 3)
+            weightedScoreSum = zeros(numUAS, 1);
+            tickCount        = zeros(numUAS, 1);  % active ticks per UAS
+
             destroyedAssets = [];
             outcomeLog      = strings(0);
 
             % --- Build occupancy map for Hybrid A* ---
-            xLimits  = [0, obj.map.size.horiz];
-            yLimits  = [0, obj.map.size.vert];
+            xLimits = [0, obj.map.size.horiz];
+            yLimits = [0, obj.map.size.vert];
 
             cellSize = 0.5;
             costMap  = binaryOccupancyMap(yLimits(2), xLimits(2), 1/cellSize);
@@ -128,7 +115,6 @@ classdef simulator
                 end
                 P = zeros(obj.map.size.vert + 1, obj.map.size.horiz + 1);
                 for s = 1:length(obj.sensors)
-                    % Pass NFZs and full sensor array for interference
                     [~, ~, Ps] = obj.sensors(s).createSensorContours( ...
                         obj.map.size, obj.NFZs, obj.sensors);
                     P = P + Ps;
@@ -157,26 +143,48 @@ classdef simulator
                         obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
                     end
 
-                    % 2. SENSOR DETECTION — accumulate detection score
-                    % Apply interference attenuation before accumulating dp
+                    % 2. SENSOR DETECTION
                     if hasSensors
+                        % Base logistic probability for each sensor at pos
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + ...
                                       (sensorLocs(:,2) - pos(2)).^2);
                         dp = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
 
+                        % Spatially-varying co-channel interference
+                        for si = 1:numSensors
+                            neighbourInterference = 0;
+                            for sj = 1:numSensors
+                                if si == sj; continue; end
+                                neighbourInterference = neighbourInterference + dp(sj);
+                            end
+                            dp(si) = dp(si) / (1 + k_int * neighbourInterference);
+                        end
+
                         % NFZ LOS attenuation
                         if ~isempty(obj.NFZs)
-                            for si = 1:length(obj.sensors)
+                            for si = 1:numSensors
                                 if losBlockedByNFZ(pos(1:2), sensorLocs(si,:), obj.NFZs)
                                     dp(si) = dp(si) * 0.1;
                                 end
                             end
                         end
 
-                        % Co-channel interference attenuation
-                        dp = dp .* interferenceAtten;
+                        % --- Option 2: weight by distance to nearest asset ---
+                        % Detection far from the asset is more valuable
+                        % (early warning). Detection right on top of the
+                        % asset is trivially easy and tactically useless.
+                        if hasAssets
+                            d_to_asset = min(sqrt( ...
+                                (assetLocs(:,1) - pos(1)).^2 + ...
+                                (assetLocs(:,2) - pos(2)).^2));
+                        else
+                            d_to_asset = 1;  % no asset — no weighting
+                        end
 
-                        detectionScore(i) = detectionScore(i) + sum(dp);
+                        % --- Option 3: accumulate weighted score and tick
+                        % count separately so we can normalise at the end ---
+                        weightedScoreSum(i) = weightedScoreSum(i) + sum(dp) * d_to_asset;
+                        tickCount(i)        = tickCount(i) + 1;
                     end
 
                     % 3. ASSET HIT CHECK
@@ -216,6 +224,17 @@ classdef simulator
                     pause(dt_local / obj.animationMultiplier);
                     obj.map.updateUASAnimation(obj.UASPos_all{1});
                     if ~obj.hideClock; obj.map.updateClock(currentTime); end
+                end
+            end
+
+            % --- Option 3: normalise by active tick count ---
+            % detectionScore is now the mean per-tick distance-weighted
+            % detection probability — independent of flight duration and
+            % unbiased toward sensors parked on the asset.
+            detectionScore = zeros(numUAS, 1);
+            for i = 1:numUAS
+                if tickCount(i) > 0
+                    detectionScore(i) = weightedScoreSum(i) / tickCount(i);
                 end
             end
 

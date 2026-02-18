@@ -65,7 +65,7 @@ classdef map < handle
 
                 % --- Combined probability field (all sensors summed) ---
                 contourf(xVec, yVec, P, 0.1:0.05:0.9, ...
-                    'FaceAlpha', 0.07, 'LineStyle', 'none');
+                    'FaceAlpha', 0.25, 'LineStyle', 'none');
                 colorbar;
 
                 % --- AOR ---
