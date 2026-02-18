@@ -63,13 +63,13 @@ classdef simulator
             
             hasSensors = ~isempty(obj.sensors);
             if hasSensors
-                p = [obj.sensors.params]; 
-                sensorD50 = [p.d50]; sensorK = [p.k];
-                req_pings = p(1).pings; 
-                scan_rate = p(1).scanRate;
-                sensorLocs = reshape([obj.sensors.location], 2, [])'; 
+                % sensor class objects: read d50 and k directly from params
+                sensorD50 = arrayfun(@(s) s.params.d50, obj.sensors);
+                sensorK   = arrayfun(@(s) s.params.k,   obj.sensors);
+                sensorLocs = reshape([obj.sensors.location], 2, [])';
+                scan_rate = dt_local; % scan every tick (sensor class has no scanRate field)
             else
-                scan_rate = 1;
+                scan_rate = dt_local;
             end
 
             hasEffectors = ~isempty(obj.effectors3D);
@@ -86,10 +86,9 @@ classdef simulator
             terrainProxy = obj.map.terrainProxy;
             numUAS = length(obj.UAS);
             uas_active = true(numUAS, 1);
-            
-            track_hist = zeros(numUAS, req_pings); 
 
-            destroyedAssets = []; cost = 0; UASkilled = 0; outcomeLog = strings(0); 
+            destroyedAssets = []; cost = 0; UASkilled = 0; outcomeLog = strings(0);
+            UASSensed = zeros(0, 4); % [time, x, y, z]
 
             % -------------------------------------------------------
             % Build occupancy costMap for Hybrid A* (built once here)
@@ -127,7 +126,6 @@ classdef simulator
                 if obj.resetGraphics
                     obj.map.wipeAnimation();
                 end
-                % Pass number of UAS to map
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.effectors, obj.sensors, numUAS, obj.hideClock);
                 UASsensedPos = [];
             end
@@ -138,10 +136,6 @@ classdef simulator
                 simComplete = true; 
                 tick_count = tick_count + 1;
                 currentTime = tick_count * dt_local;
-                
-                % check sensor scan tick
-                timeSinceLastScan = mod(currentTime, scan_rate);
-                isScanTick = (timeSinceLastScan < dt_local/2) || (abs(timeSinceLastScan - scan_rate) < dt_local/2);
                 
                 for i = 1:numUAS
                     if ~uas_active(i)
@@ -164,34 +158,28 @@ classdef simulator
                         obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
                     end
                     
-                    % 2. CHECK SENSOR TRACKING
-                    isTracked = false;
+                    % 2. CHECK SENSOR DETECTION
+                    % Each sensor fires every tick using its logistic model
                     isPinged = false;
-                    
-                    if hasSensors && isScanTick
+                    if hasSensors
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + (sensorLocs(:,2) - pos(2)).^2);
-                        raw_probs = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
-                        probs = min(raw_probs, 0.90); % Cap probability at 90%
-                        
+                        probs  = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
                         if any(probs >= rand(size(probs)))
                             isPinged = true;
                         end
-                        
-                        track_hist(i, :) = [track_hist(i, 2:end), isPinged];
                     end
-                    
-                    if sum(track_hist(i,:)) >= req_pings
-                        isTracked = true;
-                    end
-                    
-                    if isPinged && animate_on
-                         UASsensedPos = cat(1, UASsensedPos, [currentTime, pos]);
-                         obj.map.animateUASsensed(UASsensedPos);
+
+                    if isPinged
+                        UASSensed(end+1, :) = [currentTime, pos];
+                        if animate_on
+                            UASsensedPos = cat(1, UASsensedPos, [currentTime, pos]);
+                            obj.map.animateUASsensed(UASsensedPos);
+                        end
                     end
                     
                     % 3. CHECK COLLISIONS
                     eventEffector = false;
-                    if isTracked && hasEffectors
+                    if hasEffectors
                         d_eff = sqrt(sum((effLocs - pos).^2, 2));
                         if any(d_eff <= effRanges); eventEffector = true; end
                     end
@@ -241,6 +229,7 @@ classdef simulator
             end
             
             results.UASPos_all = obj.UASPos_all;
+            results.UASSensed = UASSensed;       % [time, x, y, z] — used by TestingInterface line 42
             results.destroyedAssets = destroyedAssets; 
             results.cost = cost; 
             results.UASkilled = UASkilled;
