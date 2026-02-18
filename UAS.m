@@ -23,6 +23,13 @@ classdef UAS < handle
 
     methods
         function obj = UAS(speed, entrance, target, mode, altitude)
+            arguments
+                speed
+                entrance
+                target
+                mode
+                altitude = 0   % default altitude; not used in HybridAStar mode
+            end
             obj.speed = speed;
             obj.altitude = altitude;
             obj.position = [entrance(1), entrance(2), altitude];
@@ -34,11 +41,11 @@ classdef UAS < handle
             obj.active = true; % Default to active
 
             % Initialize Hybrid A* state
-            obj.planner     = [];
-            obj.pathPoints  = [];
+            obj.planner      = [];
+            obj.pathPoints   = [];
             obj.pathHeadings = [];
-            obj.heading     = atan2(dir2D(2), dir2D(1)); % initial heading from entrance->target
-            obj.tickOffset  = 0;
+            obj.heading      = atan2(dir2D(2), dir2D(1));
+            obj.tickOffset   = 0;
         end
 
         function linearMotion(obj, time)

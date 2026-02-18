@@ -35,7 +35,7 @@ for i = 1:N
 
     UAS1 = UAS(18, dep, asset1.location, 'HybridAStar'); % Define UAS
 
-    sim = simulator(map, AOR, UAS1, [sensor1, sensor2, sensor3], [asset1], tps=20, animate=true, nfzs=[NFZ1, NFZ2], animationMultiplier=10, hideClock=false);
+    sim = simulator(map, AOR, UAS1, [], [sensor1, sensor2, sensor3], [asset1], tps=20, animate=true, nfzs=[NFZ1, NFZ2], animationMultiplier=10, hideClock=false);
 
     results = sim.runSim(); % Runsim
 
