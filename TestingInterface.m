@@ -39,5 +39,7 @@ for i = 1:N
 
     results = sim.runSim(); % Runsim
 
-    detectionProbability = sum(results.UASSensed(:, 4));
+    % UASSensed has 3 columns: [time, x, y]
+    % Count number of detections
+    detectionProbability = size(results.UASSensed, 1);
 end

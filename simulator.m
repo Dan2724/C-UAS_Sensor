@@ -222,8 +222,8 @@ classdef simulator
                 % 4. UPDATE ANIMATION
                 if animate_on
                     pause(dt_local / obj.animationMultiplier);
-                    % updateUASAnimation expects a position matrix, pass last UAS position
-                    obj.map.updateUASAnimation(obj.UASPos_all{1});
+                    % Pass entire UAS position history cell array for all UAS
+                    obj.map.updateUASAnimation(obj.UASPos_all);
                     if ~obj.hideClock; obj.map.updateClock(currentTime); end
                 end
             end
