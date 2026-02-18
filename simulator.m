@@ -98,18 +98,22 @@ classdef simulator
                 costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
                 % Mark NFZ cells as occupied
-                if ~isempty(obj.NFZs) && obj.NFZs.NumRegions > 0
+                if ~isempty(obj.NFZs)
                     [Xg, Yg] = meshgrid(xLimits(1):xLimits(2), yLimits(1):yLimits(2));
                     pts = [Xg(:), Yg(:)];
-                    inNFZ = isinterior(obj.NFZs, pts);
+                    % Check each NFZ polyshape individually and combine
+                    inNFZ = false(size(pts, 1), 1);
+                    for nfzIdx = 1:length(obj.NFZs)
+                        inNFZ = inNFZ | isinterior(obj.NFZs(nfzIdx), pts);
+                    end
                     if any(inNFZ)
                         setOccupancy(costMap, pts(inNFZ, :), 1);
                     end
                 end
 
                 % Turning radius = speed * dt
-                haModes       = arrayfun(@(u) u.mode == "HybridAStar", obj.UAS);
-                hybridSpeeds  = arrayfun(@(u) u.speed, obj.UAS(haModes));
+                haModes          = arrayfun(@(u) u.mode == "HybridAStar", obj.UAS);
+                hybridSpeeds     = arrayfun(@(u) u.speed, obj.UAS(haModes));
                 hybridTurnRadius = min(hybridSpeeds) * dt_local;
             end
             % -------------------------------------------------------
