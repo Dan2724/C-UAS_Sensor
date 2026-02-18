@@ -3,10 +3,24 @@ clear
 close all
 
 % =========================================================================
+%  Force a process-based parallel pool.
+%  The Navigation Toolbox (Hybrid A* / DPGrid) is not supported on
+%  thread-based workers, so we must use 'Processes'.
+% =========================================================================
+existingPool = gcp('nocreate');
+if ~isempty(existingPool) && ~isa(existingPool, 'parallel.ProcessPool')
+    delete(existingPool);
+    existingPool = [];
+end
+if isempty(existingPool)
+    parpool('Processes');
+end
+
+% =========================================================================
 %  Configuration
 % =========================================================================
-N          = 10;   % number of sensor configurations to try
-M          = 100;    % number of UAS trials per sensor configuration
+N          = 10;
+M          = 100;
 
 MAP_W      = 100;
 MAP_H      = 100;
@@ -29,12 +43,11 @@ asset1 = asset([55, 40]);
 
 % =========================================================================
 %  Pre-generate all random sensor configs and UAS departures
-%  (must be done outside parfor — rng is not thread-safe)
 % =========================================================================
 fprintf('Pre-generating %d sensor configurations x %d UAS departures...\n', N, M);
 
-sensorLocs = zeros(N, 3, 2);   % (config, sensor, [x y])
-depLocs    = zeros(N, M, 2);   % (config, trial,  [x y])
+sensorLocs = zeros(N, 3, 2);
+depLocs    = zeros(N, M, 2);
 
 for i = 1:N
     for s = 1:3
@@ -54,13 +67,10 @@ end
 
 % =========================================================================
 %  Parallel outer loop: sensor configurations
-%  Inner parfor: UAS trials per config
 % =========================================================================
-fprintf('Running %d configs x %d UAS trials on parallel pool...\n', N, M);
+fprintf('Running %d configs x %d UAS trials on process-based pool...\n', N, M);
 
-meanScores = zeros(N, 1);   % mean detection score per sensor config
-
-% Broadcast variables (read-only inside parfor)
+meanScores = zeros(N, 1);
 assetLoc   = asset1.location;
 nfzList    = allNFZs;
 aorShape   = AOR;
@@ -77,15 +87,10 @@ parfor i = 1:N
 
     trialScores = zeros(M, 1);
 
-    % Inner loop — UAS trials for this sensor config.
-    % parfor here would spawn nested pools which MATLAB doesn't support,
-    % so this is a plain for loop (still runs in parallel across configs).
     for j = 1:M
         dep  = squeeze(depLocs(i, j, :))';
         uObj = UAS(18, dep, assetLoc, 'HybridAStar', turnRadius=turnRadius);
 
-        % map is a handle class and is not safe to share across workers —
-        % create a lightweight throwaway instance per trial.
         trialMap = map(MAP_H, MAP_W);
 
         sim = simulator(trialMap, aorShape, uObj, sensorArray, [asset(assetLoc)], ...
@@ -115,7 +120,7 @@ fprintf('  Sensor 2             : [%.2f, %.2f]\n', bestLoc2(1), bestLoc2(2));
 fprintf('  Sensor 3             : [%.2f, %.2f]\n', bestLoc3(1), bestLoc3(2));
 
 % =========================================================================
-%  Heat map: average detection score by sensor placement bin
+%  Heat map
 % =========================================================================
 nBins    = 20;
 binEdges = linspace(0, MAP_W, nBins + 1);
@@ -167,7 +172,6 @@ bSensor1 = sensor(bestLoc1, params.d50, "logistic", params, 1, 0, 360);
 bSensor2 = sensor(bestLoc2, params.d50, "logistic", params, 1, 0, 360);
 bSensor3 = sensor(bestLoc3, params.d50, "logistic", params, 1, 0, 360);
 
-% Use the median departure from this config's trials as a representative run
 medDep = squeeze(depLocs(bestIdx, round(M/2), :))';
 bUAS   = UAS(18, medDep, asset1.location, 'HybridAStar', turnRadius=turnRadius);
 
