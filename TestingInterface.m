@@ -25,6 +25,8 @@ params.k   = 10;
 
 turnRadius = 1; % metres — configure UAS turn radius here
 
+detectionScores = zeros(N, 1); % preallocate to store score per trial
+
 for i = 1:N
     sensor1 = sensor([rand()*100, rand()*100], params.d50, "logistic", params, 1, 0, 360);
     sensor2 = sensor([rand()*100, rand()*100], params.d50, "logistic", params, 1, 0, 360);
@@ -40,12 +42,15 @@ for i = 1:N
 
     UAS1 = UAS(18, dep, asset1.location, 'HybridAStar', turnRadius=turnRadius);
 
-    sim = simulator(theMap, AOR, UAS1, [], [sensor1, sensor2, sensor3], [asset1], ...
+    sim = simulator(theMap, AOR, UAS1, [sensor1, sensor2, sensor3], [asset1], ...
         tps=20, animate=true, ...
         nfzs=[NFZ1, NFZ2, NFZ3, NFZ4, NFZ5, NFZ6], ...
         animationMultiplier=10, hideClock=false);
 
     results = sim.runSim();
 
-    detectionProbability = size(results.UASSensed, 1);
+    % results.detectionScore is the cumulative sum of per-tick detection
+    % probabilities (0 < dp < 1) across all sensors for UAS1.
+    detectionScores(i) = results.detectionScore(1);
+    disp(results.detectionScore(1));
 end
