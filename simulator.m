@@ -92,17 +92,15 @@ classdef simulator
             % -------------------------------------------------------
             hasHybridAStar = any(arrayfun(@(u) u.mode == "HybridAStar", obj.UAS));
             if hasHybridAStar
-                xLimits = [0, obj.map.size.horiz];
-                yLimits = [0, obj.map.size.vert];
+                xLimits  = [0, obj.map.size.horiz];
+                yLimits  = [0, obj.map.size.vert];
+                cellSize = 2; % metres per cell
 
-                % Use cellSize=2 so that MotionPrimitiveLength constraint is
-                % satisfied: must be <= sqrt(2)*cellSize ≈ 2.83.
-                % Speed=18, dt=1/20 → InterpolationDistance=0.9, well within limit.
-                cellSize = 2;
-                costMap = occupancyMap(obj.map.size.vert, obj.map.size.horiz, 1/cellSize);
-                costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
+                % Build occupancy map with explicit world limits
+                costMap = occupancyMap(yLimits(2), xLimits(2), 1/cellSize, 'local');
+                % 'local' frame: origin at (0,0), x right, y up — matches our coordinate system
 
-                % Mark NFZ cells as occupied — loop over each polyshape individually
+                % Mark NFZ cells as occupied
                 if ~isempty(obj.NFZs)
                     [Xg, Yg] = meshgrid(xLimits(1):cellSize:xLimits(2), yLimits(1):cellSize:yLimits(2));
                     pts = [Xg(:), Yg(:)];
@@ -115,10 +113,8 @@ classdef simulator
                     end
                 end
 
-                % Turning radius and interpolation distance based on UAS speed
-                haModes          = arrayfun(@(u) u.mode == "HybridAStar", obj.UAS);
-                hybridSpeeds     = arrayfun(@(u) u.speed, obj.UAS(haModes));
-                hybridTurnRadius = min(hybridSpeeds) * dt_local;
+                % Turn radius: use 3x cell size (physically reasonable, avoids planner constraint violations)
+                hybridTurnRadius = 3 * cellSize;
             end
             % -------------------------------------------------------
 
