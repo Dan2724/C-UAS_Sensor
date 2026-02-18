@@ -34,14 +34,14 @@ classdef simulator
             obj.sensors = sensors;
             obj.assets  = assets;
 
-            obj.tick                 = 0;
-            obj.tps                  = options.tps;
-            obj.dt                   = 1 / obj.tps;
-            obj.animate              = options.animate;
-            obj.NFZs                 = options.nfzs;
-            obj.resetGraphics        = options.resetGraphics;
-            obj.animationMultiplier  = options.animationMultiplier;
-            obj.hideClock            = options.hideClock;
+            obj.tick                = 0;
+            obj.tps                 = options.tps;
+            obj.dt                  = 1 / obj.tps;
+            obj.animate             = options.animate;
+            obj.NFZs                = options.nfzs;
+            obj.resetGraphics       = options.resetGraphics;
+            obj.animationMultiplier = options.animationMultiplier;
+            obj.hideClock           = options.hideClock;
 
             obj.UASPos_all = cell(1, length(obj.UAS));
             for i = 1:length(obj.UAS)
@@ -70,9 +70,7 @@ classdef simulator
             uas_active = true(numUAS, 1);
 
             % Detection score: running sum of per-tick detection probabilities
-            % for each UAS. Accumulated across all ticks and all sensors.
-            detectionScore = zeros(numUAS, 1);
-
+            detectionScore  = zeros(numUAS, 1);
             destroyedAssets = [];
             outcomeLog      = strings(0);
 
@@ -80,15 +78,11 @@ classdef simulator
             xLimits  = [0, obj.map.size.horiz];
             yLimits  = [0, obj.map.size.vert];
 
-            % Use 0.5 m/cell resolution. Finer cells mean NFZ edges are
-            % accurately represented without needing a separate inflate step.
             cellSize = 0.5;
             costMap  = binaryOccupancyMap(yLimits(2), xLimits(2), 1/cellSize);
             costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
             if ~isempty(obj.NFZs)
-                % Sample every 0.25 m — well below cell size — so no edge
-                % cell is ever missed, including thin polygon boundaries.
                 sampleStep = cellSize / 2;
                 xs = xLimits(1) : sampleStep : xLimits(2);
                 ys = yLimits(1) : sampleStep : yLimits(2);
@@ -103,7 +97,6 @@ classdef simulator
                 end
             end
 
-            % Ensure UAS start and goal cells are free
             for k = 1:length(obj.UAS)
                 setOccupancy(costMap, obj.UAS(k).position(1:2), 0);
                 setOccupancy(costMap, obj.UAS(k).target(1:2),   0);
@@ -117,7 +110,8 @@ classdef simulator
                 end
                 P = zeros(obj.map.size.vert + 1, obj.map.size.horiz + 1);
                 for s = 1:length(obj.sensors)
-                    [~, ~, Ps] = obj.sensors(s).createSensorContours(obj.map.size);
+                    % Pass NFZs so contour plot reflects LOS attenuation
+                    [~, ~, Ps] = obj.sensors(s).createSensorContours(obj.map.size, obj.NFZs);
                     P = P + Ps;
                 end
                 obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, P, obj.hideClock);
@@ -144,17 +138,24 @@ classdef simulator
                         obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
                     end
 
-                    % 2. SENSOR DETECTION — accumulate detection score
-                    % For each sensor, compute the logistic detection
-                    % probability dp (0 < dp < 1) and add it to the running
-                    % total. No stochastic sampling is performed here; the
-                    % score represents the cumulative expected detections
-                    % over the entire flight.
+                    % 2. SENSOR DETECTION — accumulate detection score.
+                    % Check LOS to each sensor: if the straight line from the
+                    % UAS position to the sensor passes through an NFZ, apply
+                    % the same attenuation factor used in the contour map.
                     if hasSensors
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + ...
                                       (sensorLocs(:,2) - pos(2)).^2);
-                        % dp: column vector, one probability per sensor
                         dp = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
+
+                        % Attenuate dp for sensors whose LOS is blocked by an NFZ
+                        if ~isempty(obj.NFZs)
+                            for si = 1:length(obj.sensors)
+                                if losBlockedByNFZ(pos(1:2), sensorLocs(si,:), obj.NFZs)
+                                    dp(si) = dp(si) * 0.1;
+                                end
+                            end
+                        end
+
                         detectionScore(i) = detectionScore(i) + sum(dp);
                     end
 
@@ -198,12 +199,43 @@ classdef simulator
                 end
             end
 
-            % --- Output results ---
             results.UASPos_all      = obj.UASPos_all;
-            results.detectionScore  = detectionScore;  % cumulative sum of dp per UAS
+            results.detectionScore  = detectionScore;
             results.destroyedAssets = destroyedAssets;
             results.outcomeLog      = outcomeLog;
             results.tick            = tick_count;
+        end
+    end
+end
+
+% -------------------------------------------------------------------------
+% Local helper: returns true if the straight line from point A to point B
+% is intersected by any edge of any NFZ polygon.
+% -------------------------------------------------------------------------
+function blocked = losBlockedByNFZ(A, B, nfzs)
+    blocked = false;
+    for n = 1:length(nfzs)
+        vx   = nfzs(n).Vertices(:, 1);
+        vy   = nfzs(n).Vertices(:, 2);
+        numV = length(vx);
+        for j = 1:numV
+            j2  = mod(j, numV) + 1;
+            ex1 = vx(j);  ey1 = vy(j);
+            ex2 = vx(j2); ey2 = vy(j2);
+
+            dgx = B(1) - A(1);  dgy = B(2) - A(2);
+            dex = ex2 - ex1;    dey = ey2 - ey1;
+
+            denom = dgx * dey - dgy * dex;
+            if abs(denom) < 1e-10; continue; end
+
+            t = ((ex1 - A(1)) * dey - (ey1 - A(2)) * dex) / denom;
+            u = ((ex1 - A(1)) * dgy - (ey1 - A(2)) * dgx) / denom;
+
+            if t > 1e-6 && t < (1 - 1e-6) && u >= 0 && u <= 1
+                blocked = true;
+                return;
+            end
         end
     end
 end
