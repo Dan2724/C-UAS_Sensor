@@ -19,8 +19,8 @@ end
 % =========================================================================
 %  Configuration
 % =========================================================================
-N          = 10;
-M          = 100;
+N          = 1000;
+M          = 10;
 
 MAP_W      = 100;
 MAP_H      = 100;
@@ -120,53 +120,12 @@ fprintf('  Sensor 2             : [%.2f, %.2f]\n', bestLoc2(1), bestLoc2(2));
 fprintf('  Sensor 3             : [%.2f, %.2f]\n', bestLoc3(1), bestLoc3(2));
 
 % =========================================================================
-%  Heat map
-% =========================================================================
-nBins    = 20;
-binEdges = linspace(0, MAP_W, nBins + 1);
-heatSum  = zeros(nBins, nBins);
-heatCnt  = zeros(nBins, nBins);
-
-for i = 1:N
-    for s = 1:3
-        sx = sensorLocs(i, s, 1);
-        sy = sensorLocs(i, s, 2);
-        bx = find(sx >= binEdges(1:end-1) & sx < binEdges(2:end), 1);
-        by = find(sy >= binEdges(1:end-1) & sy < binEdges(2:end), 1);
-        if ~isempty(bx) && ~isempty(by)
-            heatSum(by, bx) = heatSum(by, bx) + meanScores(i);
-            heatCnt(by, bx) = heatCnt(by, bx) + 1;
-        end
-    end
-end
-
-heatAvg          = zeros(nBins, nBins);
-visited          = heatCnt > 0;
-heatAvg(visited) = heatSum(visited) ./ heatCnt(visited);
-
-figure;
-binCentres = binEdges(1:end-1) + diff(binEdges)/2;
-imagesc(binCentres, binCentres, heatAvg);
-set(gca, 'YDir', 'normal');
-colormap(hot); colorbar; hold on;
-
-for k = 1:length(allNFZs)
-    plot(allNFZs(k), 'FaceColor', 'none', 'EdgeColor', 'c', 'LineWidth', 1.5);
-end
-plot(asset1.location(1), asset1.location(2), 'gs', ...
-    'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Asset');
-plot(bestLoc1(1), bestLoc1(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S1');
-plot(bestLoc2(1), bestLoc2(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S2');
-plot(bestLoc3(1), bestLoc3(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S3');
-xlim([0 MAP_W]); ylim([0 MAP_H]);
-xlabel('X (m)'); ylabel('Y (m)');
-title(sprintf('Avg Detection Score by Sensor Placement  (N=%d configs, M=%d UAS trials each)', N, M));
-legend('show', 'Location', 'northeastoutside');
-
-% =========================================================================
-%  Re-run best configuration with animation
+%  Re-run best configuration with animation (Figure 1)
 % =========================================================================
 fprintf('\nRe-running best configuration with animation...\n');
+
+figAnim = figure('Name', 'Best Configuration Animation');
+
 theMap   = map(MAP_H, MAP_W);
 bSensor1 = sensor(bestLoc1, params.d50, "logistic", params, 1, 0, 360);
 bSensor2 = sensor(bestLoc2, params.d50, "logistic", params, 1, 0, 360);
@@ -178,7 +137,67 @@ bUAS   = UAS(18, medDep, asset1.location, 'HybridAStar', turnRadius=turnRadius);
 simBest = simulator(theMap, AOR, bUAS, [bSensor1, bSensor2, bSensor3], [asset1], ...
     tps=20, animate=true, nfzs=allNFZs, animationMultiplier=10, hideClock=false);
 simBest.runSim();
+
+figure(figAnim);
 title(sprintf('Best Configuration  |  Mean Score: %.4f', bestScore));
+
+% =========================================================================
+%  Heat map (Figure 2) — smooth Gaussian kernel density estimate
+%
+%  For every sensor placement, its mean detection score is "smeared" across
+%  the map as a 2-D Gaussian with bandwidth sigma.  Summing all N*3
+%  contributions and dividing by the total weight at each pixel gives a
+%  smooth, continuous map of "where sensors tended to perform well".
+% =========================================================================
+sigma    = 8;          % Gaussian bandwidth in metres — tune to taste
+res      = 1;          % grid resolution in metres
+xVec     = 0 : res : MAP_W;
+yVec     = 0 : res : MAP_H;
+[Xg, Yg] = meshgrid(xVec, yVec);
+
+weightSum = zeros(size(Xg));   % accumulated score * kernel weight
+kernelSum = zeros(size(Xg));   % accumulated kernel weight (for normalisation)
+
+for i = 1:N
+    for s = 1:3
+        sx = sensorLocs(i, s, 1);
+        sy = sensorLocs(i, s, 2);
+
+        % 2-D Gaussian centred on this sensor location
+        G = exp(-((Xg - sx).^2 + (Yg - sy).^2) / (2 * sigma^2));
+
+        weightSum = weightSum + meanScores(i) .* G;
+        kernelSum = kernelSum + G;
+    end
+end
+
+% Normalise: weighted average score at each pixel
+heatMap = zeros(size(Xg));
+valid = kernelSum > 1e-10;
+heatMap(valid) = weightSum(valid) ./ kernelSum(valid);
+
+figHeat = figure('Name', 'Sensor Placement Heat Map');
+ax = axes(figHeat);
+imagesc(ax, xVec, yVec, heatMap);
+set(ax, 'YDir', 'normal');
+colormap(ax, hot);
+colorbar(ax);
+hold(ax, 'on');
+
+for k = 1:length(allNFZs)
+    plot(ax, allNFZs(k), 'FaceColor', 'none', 'EdgeColor', 'c', 'LineWidth', 1.5);
+end
+plot(ax, asset1.location(1), asset1.location(2), 'gs', ...
+    'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Asset');
+plot(ax, bestLoc1(1), bestLoc1(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S1');
+plot(ax, bestLoc2(1), bestLoc2(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S2');
+plot(ax, bestLoc3(1), bestLoc3(2), 'b^', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Best S3');
+xlim(ax, [0 MAP_W]);
+ylim(ax, [0 MAP_H]);
+xlabel(ax, 'X (m)');
+ylabel(ax, 'Y (m)');
+title(ax, sprintf('Avg Detection Score by Sensor Placement  (N=%d configs, M=%d UAS trials each)', N, M));
+legend(ax, 'show', 'Location', 'northeastoutside');
 
 % =========================================================================
 %  Local helpers
