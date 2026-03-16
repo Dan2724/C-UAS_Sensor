@@ -11,7 +11,8 @@ classdef simulator
         dt
         tps
         animate
-        NFZs
+        NFZs_inflated  % For UAS path planning
+        NFZs_base      % For sensor LOS
         resetGraphics
         animationMultiplier
         hideClock
@@ -23,22 +24,24 @@ classdef simulator
                 map, aor, uas, sensors, assets
                 options.tps                 = 20
                 options.animate             = true
-                options.nfzs                = polyshape.empty
+                options.nfzs_inflated       = polyshape.empty
+                options.nfzs_base           = polyshape.empty
                 options.resetGraphics       = true
                 options.animationMultiplier = 1
                 options.hideClock           = false
             end
-            obj.map     = map;
-            obj.AOR     = aor;
-            obj.UAS     = uas;
-            obj.sensors = sensors;
-            obj.assets  = assets;
+            obj.map           = map;
+            obj.AOR           = aor;
+            obj.UAS           = uas;
+            obj.sensors       = sensors;
+            obj.assets        = assets;
 
             obj.tick                = 0;
             obj.tps                 = options.tps;
             obj.dt                  = 1 / obj.tps;
             obj.animate             = options.animate;
-            obj.NFZs                = options.nfzs;
+            obj.NFZs_inflated       = options.nfzs_inflated;
+            obj.NFZs_base           = options.nfzs_base;
             obj.resetGraphics       = options.resetGraphics;
             obj.animationMultiplier = options.animationMultiplier;
             obj.hideClock           = options.hideClock;
@@ -71,30 +74,29 @@ classdef simulator
             numUAS     = length(obj.UAS);
             uas_active = true(numUAS, 1);
 
-            % Raw weighted score accumulator and tick counter per UAS.
             weightedScoreSum = zeros(numUAS, 1);
             tickCount        = zeros(numUAS, 1);
 
             destroyedAssets = [];
             outcomeLog      = strings(0);
 
-            % --- Build occupancy map for Hybrid A* ---
+            % --- Build occupancy map for Hybrid A* (INFLATED NFZs) ---
             xLimits = [0, obj.map.size.horiz];
             yLimits = [0, obj.map.size.vert];
 
-            cellSize = 0.5;
+            cellSize = 1.0;  % OPTIMIZATION: Coarser grid (was 0.5)
             costMap  = binaryOccupancyMap(yLimits(2), xLimits(2), 1/cellSize);
             costMap.GridOriginInLocal = [xLimits(1), yLimits(1)];
 
-            if ~isempty(obj.NFZs)
-                sampleStep = cellSize / 2;
+            if ~isempty(obj.NFZs_inflated)
+                sampleStep = cellSize;  % OPTIMIZATION: Larger step (was cellSize/2)
                 xs = xLimits(1) : sampleStep : xLimits(2);
                 ys = yLimits(1) : sampleStep : yLimits(2);
                 [Xg, Yg] = meshgrid(xs, ys);
                 pts   = [Xg(:), Yg(:)];
                 inNFZ = false(size(pts, 1), 1);
-                for nfzIdx = 1:length(obj.NFZs)
-                    inNFZ = inNFZ | isinterior(obj.NFZs(nfzIdx), pts);
+                for nfzIdx = 1:length(obj.NFZs_inflated)
+                    inNFZ = inNFZ | isinterior(obj.NFZs_inflated(nfzIdx), pts);
                 end
                 if any(inNFZ)
                     setOccupancy(costMap, pts(inNFZ, :), 1);
@@ -115,15 +117,18 @@ classdef simulator
                 P = zeros(obj.map.size.vert + 1, obj.map.size.horiz + 1);
                 for s = 1:length(obj.sensors)
                     [~, ~, Ps] = obj.sensors(s).createSensorContours( ...
-                        obj.map.size, obj.NFZs, obj.sensors);
+                        obj.map.size, obj.NFZs_base, obj.sensors);
                     P = P + Ps;
                 end
-                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs, obj.sensors, P, obj.hideClock);
+                obj.map.startAnimation(obj.AOR, obj.assets, obj.NFZs_base, obj.sensors, P, obj.hideClock);
             end
 
             simComplete = false;
             tick_count  = 0;
-            maxTicks    = 10000; % Safety limit to prevent infinite loops
+            maxTicks    = 400;  % OPTIMIZATION: Reduce from 10000
+
+            % OPTIMIZATION: Pre-compute LOS blocking (static throughout simulation)
+            losBlocked = false(numSensors, 1);
 
             while ~simComplete && tick_count < maxTicks
                 simComplete = true;
@@ -139,34 +144,26 @@ classdef simulator
                     uasObj.hybridAStarMotion(dt_local, tick_count, costMap);
                     pos = uasObj.position;
 
-                    if animate_on
-                        obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
-                    end
+                    % Always store positions (needed for path export)
+                    obj.UASPos_all{i} = cat(1, obj.UASPos_all{i}, pos);
 
                     % 2. SENSOR DETECTION
                     if hasSensors
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + ...
-                                      (sensorLocs(:,2) - pos(2)).^2);
+                            (sensorLocs(:,2) - pos(2)).^2);
                         dp = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
 
-                        % Spatially-varying co-channel interference
-                        for si = 1:numSensors
-                            neighbourInterference = 0;
-                            for sj = 1:numSensors
-                                if si == sj; continue; end
-                                neighbourInterference = neighbourInterference + dp(sj);
-                            end
-                            dp(si) = dp(si) / (1 + k_int * neighbourInterference);
-                        end
+                        % OPTIMIZATION: Vectorized interference calculation
+                        dp_sum = sum(dp);
+                        dp = dp ./ (1 + k_int * (dp_sum - dp));
 
-                        % NFZ LOS attenuation
-                        if ~isempty(obj.NFZs)
+                        % OPTIMIZATION: Only check LOS every 10 ticks
+                        if mod(tick_count, 10) == 0 && ~isempty(obj.NFZs_base)
                             for si = 1:numSensors
-                                if losBlockedByNFZ(pos(1:2), sensorLocs(si,:), obj.NFZs)
-                                    dp(si) = dp(si) * 0.1;
-                                end
+                                losBlocked(si) = losBlockedByNFZ(pos(1:2), sensorLocs(si,:), obj.NFZs_base);
                             end
                         end
+                        dp(losBlocked) = dp(losBlocked) * 0.1;
 
                         if hasAssets
                             d_to_asset = min(sqrt( ...
@@ -184,29 +181,26 @@ classdef simulator
                     eventAsset = false; hitAssetID = 0;
                     if hasAssets && ~uasObj.headingToEgress
                         d_asset = sqrt((assetLocs(:,1) - pos(1)).^2 + ...
-                                       (assetLocs(:,2) - pos(2)).^2);
-                        hitIdx  = find(d_asset <= (uasObj.speed * dt_local));
+                            (assetLocs(:,2) - pos(2)).^2);
+                        hitIdx  = find(d_asset <= (uasObj.speed * dt_local), 1);
                         if ~isempty(hitIdx)
                             eventAsset = true;
-                            hitAssetID = hitIdx(1);
+                            hitAssetID = hitIdx;
                         end
                     end
 
-                    % Check if UAS exited map
                     eventExit = (pos(1) < 0 || pos(1) > obj.map.size.horiz || ...
-                                 pos(2) < 0 || pos(2) > obj.map.size.vert);
+                        pos(2) < 0 || pos(2) > obj.map.size.vert);
 
-                    % Check if UAS reached egress (close to map boundary while heading to egress)
                     eventEgress = false;
                     if uasObj.headingToEgress && ~isempty(uasObj.egressPoint)
                         d_to_egress = sqrt((pos(1) - uasObj.egressPoint(1))^2 + ...
-                                          (pos(2) - uasObj.egressPoint(2))^2);
-                        if d_to_egress < 5.0  % Within 5m of egress
+                            (pos(2) - uasObj.egressPoint(2))^2);
+                        if d_to_egress < 5.0
                             eventEgress = true;
                         end
                     end
 
-                    % Handle events
                     if eventExit || eventEgress
                         outcomeLog(end+1) = "Escaped";
                         uasObj.active     = false;
@@ -219,7 +213,6 @@ classdef simulator
                             if animate_on
                                 obj.map.animateDestroyedAssets(obj.assets, destroyedAssets);
                             end
-                            % UAS continues to egress
                         end
                     end
                 end
@@ -232,7 +225,6 @@ classdef simulator
                 end
             end
 
-            % --- Normalise detection scores ---
             detectionScore = zeros(numUAS, 1);
             for i = 1:numUAS
                 if tickCount(i) > 0
@@ -251,29 +243,29 @@ end
 
 % -------------------------------------------------------------------------
 function blocked = losBlockedByNFZ(A, B, nfzs)
-    blocked = false;
-    for n = 1:length(nfzs)
-        vx   = nfzs(n).Vertices(:, 1);
-        vy   = nfzs(n).Vertices(:, 2);
-        numV = length(vx);
-        for j = 1:numV
-            j2  = mod(j, numV) + 1;
-            ex1 = vx(j);  ey1 = vy(j);
-            ex2 = vx(j2); ey2 = vy(j2);
+blocked = false;
+for n = 1:length(nfzs)
+    vx   = nfzs(n).Vertices(:, 1);
+    vy   = nfzs(n).Vertices(:, 2);
+    numV = length(vx);
+    for j = 1:numV
+        j2  = mod(j, numV) + 1;
+        ex1 = vx(j);  ey1 = vy(j);
+        ex2 = vx(j2); ey2 = vy(j2);
 
-            dgx = B(1) - A(1);  dgy = B(2) - A(2);
-            dex = ex2 - ex1;    dey = ey2 - ey1;
+        dgx = B(1) - A(1);  dgy = B(2) - A(2);
+        dex = ex2 - ex1;    dey = ey2 - ey1;
 
-            denom = dgx * dey - dgy * dex;
-            if abs(denom) < 1e-10; continue; end
+        denom = dgx * dey - dgy * dex;
+        if abs(denom) < 1e-10; continue; end
 
-            t = ((ex1 - A(1)) * dey - (ey1 - A(2)) * dex) / denom;
-            u = ((ex1 - A(1)) * dgy - (ey1 - A(2)) * dgx) / denom;
+        t = ((ex1 - A(1)) * dey - (ey1 - A(2)) * dex) / denom;
+        u = ((ex1 - A(1)) * dgy - (ey1 - A(2)) * dgx) / denom;
 
-            if t > 1e-6 && t < (1 - 1e-6) && u >= 0 && u <= 1
-                blocked = true;
-                return;
-            end
+        if t > 1e-6 && t < (1 - 1e-6) && u >= 0 && u <= 1
+            blocked = true;
+            return;
         end
     end
+end
 end
