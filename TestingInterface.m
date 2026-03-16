@@ -16,22 +16,24 @@ end
 % =========================================================================
 %  Configuration
 % =========================================================================
-N          = 100;
-M          = 10;
+N          = 1000;
+M          = 100;
 
-MAP_W      = 160;
-MAP_H      = 160;
+MAP_W      = 100;
+MAP_H      = 100;
 
 params.d50 = 15;
 params.k   = 15;
 turnRadius = 5;
 
 % --- No-Fly Zones ---
-NFZ1 = polyshape([20,  60, 40], [100, 100, 140]);
-NFZ2 = polyshape([20, 50, 20],     [20, 40,  60]);
-NFZ3 = polyshape([80, 120, 150, 110],     [20, 30, 50, 40]);
-NFZ4 = polyshape([100, 130, 110, 80],     [100, 120, 150, 130]);
-allNFZs = [NFZ1, NFZ2, NFZ3, NFZ4];
+NFZ1 = polyshape([8,  25, 42, 44, 25], [91, 96, 89, 66, 87]);
+NFZ2 = polyshape([71, 84, 82, 68],     [31, 22,  6, 10]);
+NFZ3 = polyshape([30, 50, 52, 32],     [55, 58, 40, 38]);
+NFZ4 = polyshape([60, 78, 80, 62],     [70, 72, 55, 52]);
+NFZ5 = polyshape([10, 28, 26,  8],     [35, 38, 18, 15]);
+NFZ6 = polyshape([45, 65, 67, 47],     [88, 90, 75, 73]);
+allNFZs = [NFZ1, NFZ2, NFZ3, NFZ4, NFZ5, NFZ6];
 
 
 fprintf('Pre-generating %d sensor configurations x %d UAS departures...\n', N, M);
