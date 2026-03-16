@@ -72,9 +72,8 @@ classdef simulator
             uas_active = true(numUAS, 1);
 
             % Raw weighted score accumulator and tick counter per UAS.
-            % Final score = weightedScoreSum / tick_count  (Option 3)
             weightedScoreSum = zeros(numUAS, 1);
-            tickCount        = zeros(numUAS, 1);  % active ticks per UAS
+            tickCount        = zeros(numUAS, 1);
 
             destroyedAssets = [];
             outcomeLog      = strings(0);
@@ -124,8 +123,9 @@ classdef simulator
 
             simComplete = false;
             tick_count  = 0;
+            maxTicks    = 10000; % Safety limit to prevent infinite loops
 
-            while ~simComplete
+            while ~simComplete && tick_count < maxTicks
                 simComplete = true;
                 tick_count  = tick_count + 1;
                 currentTime = tick_count * dt_local;
@@ -145,7 +145,6 @@ classdef simulator
 
                     % 2. SENSOR DETECTION
                     if hasSensors
-                        % Base logistic probability for each sensor at pos
                         d_sens = sqrt((sensorLocs(:,1) - pos(1)).^2 + ...
                                       (sensorLocs(:,2) - pos(2)).^2);
                         dp = 1 ./ (1 + exp((d_sens - sensorD50') ./ sensorK'));
@@ -169,27 +168,21 @@ classdef simulator
                             end
                         end
 
-                        % --- Option 2: weight by distance to nearest asset ---
-                        % Detection far from the asset is more valuable
-                        % (early warning). Detection right on top of the
-                        % asset is trivially easy and tactically useless.
                         if hasAssets
                             d_to_asset = min(sqrt( ...
                                 (assetLocs(:,1) - pos(1)).^2 + ...
                                 (assetLocs(:,2) - pos(2)).^2));
                         else
-                            d_to_asset = 1;  % no asset — no weighting
+                            d_to_asset = 1;
                         end
 
-                        % --- Option 3: accumulate weighted score and tick
-                        % count separately so we can normalise at the end ---
                         weightedScoreSum(i) = weightedScoreSum(i) + sum(dp) * d_to_asset;
                         tickCount(i)        = tickCount(i) + 1;
                     end
 
-                    % 3. ASSET HIT CHECK
+                    % 3. COLLISION/EVENT CHECKS
                     eventAsset = false; hitAssetID = 0;
-                    if hasAssets
+                    if hasAssets && ~uasObj.headingToEgress
                         d_asset = sqrt((assetLocs(:,1) - pos(1)).^2 + ...
                                        (assetLocs(:,2) - pos(2)).^2);
                         hitIdx  = find(d_asset <= (uasObj.speed * dt_local));
@@ -199,10 +192,22 @@ classdef simulator
                         end
                     end
 
+                    % Check if UAS exited map
                     eventExit = (pos(1) < 0 || pos(1) > obj.map.size.horiz || ...
                                  pos(2) < 0 || pos(2) > obj.map.size.vert);
 
-                    if eventExit
+                    % Check if UAS reached egress (close to map boundary while heading to egress)
+                    eventEgress = false;
+                    if uasObj.headingToEgress && ~isempty(uasObj.egressPoint)
+                        d_to_egress = sqrt((pos(1) - uasObj.egressPoint(1))^2 + ...
+                                          (pos(2) - uasObj.egressPoint(2))^2);
+                        if d_to_egress < 5.0  % Within 5m of egress
+                            eventEgress = true;
+                        end
+                    end
+
+                    % Handle events
+                    if eventExit || eventEgress
                         outcomeLog(end+1) = "Escaped";
                         uasObj.active     = false;
                         uas_active(i)     = false;
@@ -214,7 +219,7 @@ classdef simulator
                             if animate_on
                                 obj.map.animateDestroyedAssets(obj.assets, destroyedAssets);
                             end
-                            simComplete = true;
+                            % UAS continues to egress
                         end
                     end
                 end
@@ -227,10 +232,7 @@ classdef simulator
                 end
             end
 
-            % --- Option 3: normalise by active tick count ---
-            % detectionScore is now the mean per-tick distance-weighted
-            % detection probability — independent of flight duration and
-            % unbiased toward sensors parked on the asset.
+            % --- Normalise detection scores ---
             detectionScore = zeros(numUAS, 1);
             for i = 1:numUAS
                 if tickCount(i) > 0

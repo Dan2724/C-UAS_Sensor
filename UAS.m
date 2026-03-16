@@ -15,6 +15,10 @@ classdef UAS < handle
         heading
         tickOffset
         turnRadius
+        
+        % NEW: egress properties
+        egressPoint
+        headingToEgress
     end
 
     methods
@@ -26,6 +30,7 @@ classdef UAS < handle
                 mode
                 options.altitude   = 0
                 options.turnRadius = 5
+                options.egressPoint = []  % NEW
             end
             obj.speed      = speed;
             obj.altitude   = options.altitude;
@@ -33,6 +38,8 @@ classdef UAS < handle
             obj.target     = target;
             obj.mode       = mode;
             obj.turnRadius = options.turnRadius;
+            obj.egressPoint = options.egressPoint;  % NEW
+            obj.headingToEgress = false;  % NEW
 
             dir2D = obj.target(1:2) - obj.position(1:2);
             obj.targetUnitVector = [dir2D/norm(dir2D), 0];
@@ -55,29 +62,16 @@ classdef UAS < handle
                 sv = validatorOccupancyMap(ss);
                 sv.Map = costMap;
 
-                % ValidationDistance: check every 0.25 m so no occupied
-                % cell can be skipped by a motion primitive
                 sv.ValidationDistance = 0.25;
 
-                % Build planner, setting MinTurningRadius FIRST.
-                % MotionPrimitiveLength must satisfy:
-                %   sqrt(2)*cellSize < primLen <= (pi/2)*MinTurningRadius
-                % With cellSize=0.5 and turnRadius>=1:
-                %   lower > 0.707,  upper = (pi/2)*turnRadius
-                % We pick primLen = 0.75 * (pi/2) * turnRadius, clamped
-                % above sqrt(2)*cellSize so it is always valid.
                 cellSize = 1 / costMap.Resolution;
                 minLen   = sqrt(2) * cellSize + 0.01;
                 maxLen   = (pi/2) * obj.turnRadius;
                 primLen  = max(minLen, 0.75 * maxLen);
                 interpDist = min(0.25, primLen * 0.5);
 
-                % Construct with ONLY the validator — no name-value pairs
-                % that could trigger validation before MinTurningRadius is set
                 obj.planner = plannerHybridAStar(sv);
 
-                % Now set properties in dependency order:
-                % MinTurningRadius first, then MotionPrimitiveLength
                 obj.planner.MinTurningRadius      = obj.turnRadius;
                 obj.planner.MotionPrimitiveLength  = primLen;
                 obj.planner.InterpolationDistance  = interpDist;
@@ -98,7 +92,6 @@ classdef UAS < handle
                 obj.tickOffset = tick - 1;
             end
 
-            % If planning failed, hold position — do NOT fly through NFZs
             if isempty(obj.pathPoints)
                 return;
             end
@@ -112,17 +105,25 @@ classdef UAS < handle
                 obj.targetUnitVector = [cos(obj.heading), sin(obj.heading), 0];
 
             elseif idx > size(obj.pathPoints, 1)
-                % Path exhausted — replan toward nearest map boundary
-                posXY  = obj.position(1:2);
-                xl     = costMap.XWorldLimits;
-                yl     = costMap.YWorldLimits;
-                margin = 2.0;   % stay 2 m inside world limits
-                posEsc = [xl(1)+margin, posXY(2);
-                          posXY(1),     yl(1)+margin;
-                          xl(2)-margin, posXY(2);
-                          posXY(1),     yl(2)-margin];
-                [~, Iesc]  = min(sum((posEsc - posXY).^2, 2));
-                obj.target = posEsc(Iesc, :);
+                % Path exhausted — replan to egress if available, else map boundary
+                posXY = obj.position(1:2);
+                
+                if ~isempty(obj.egressPoint) && ~obj.headingToEgress
+                    % Switch to egress point
+                    obj.target = obj.egressPoint;
+                    obj.headingToEgress = true;
+                else
+                    % Original behavior: go to nearest boundary
+                    xl     = costMap.XWorldLimits;
+                    yl     = costMap.YWorldLimits;
+                    margin = 2.0;
+                    posEsc = [xl(1)+margin, posXY(2);
+                              posXY(1),     yl(1)+margin;
+                              xl(2)-margin, posXY(2);
+                              posXY(1),     yl(2)-margin];
+                    [~, Iesc]  = min(sum((posEsc - posXY).^2, 2));
+                    obj.target = posEsc(Iesc, :);
+                end
 
                 goalHeading = atan2(obj.target(2) - posXY(2), ...
                                     obj.target(1) - posXY(1));
@@ -133,7 +134,6 @@ classdef UAS < handle
                     obj.pathPoints   = refPath.States(:, 1:2);
                     obj.pathHeadings = refPath.States(:, 3);
                 catch
-                    % Hold position if replan also fails
                     obj.pathPoints   = [];
                     obj.pathHeadings = [];
                     return;

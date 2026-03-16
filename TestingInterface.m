@@ -19,8 +19,8 @@ end
 % =========================================================================
 %  Configuration
 % =========================================================================
-N          = 100;
-M          = 10;
+N          = 10;
+M          = 100;  % Changed from 10 to 100
 
 MAP_W      = 180;
 MAP_H      = 180;
@@ -28,30 +28,39 @@ MAP_H      = 180;
 params.d50 = 10;
 params.k   = 10;
 turnRadius = 10;
+uasRadius  = 3;  % UAS physical radius for NFZ inflation
 
-% --- No-Fly Zones ---
-NFZ1 = polyshape([20,  60, 40], [100, 100, 140]);
-NFZ2 = polyshape([20, 50, 20],     [20, 40,  60]);
-NFZ3 = polyshape([80, 120, 150, 110],     [20, 30, 50, 40]);
-NFZ4 = polyshape([100, 130, 110, 80],     [100, 120, 150, 130]);
+% --- No-Fly Zones (inflated by UAS radius) ---
+NFZ1_base = polyshape([20,  60, 40], [100, 100, 140]);
+NFZ2_base = polyshape([20, 50, 20],     [20, 40,  60]);
+NFZ3_base = polyshape([80, 120, 150, 110],     [20, 30, 50, 40]);
+NFZ4_base = polyshape([100, 130, 110, 80],     [100, 120, 150, 130]);
+
+% Inflate NFZs by UAS radius
+NFZ1 = polybuffer(NFZ1_base, uasRadius);
+NFZ2 = polybuffer(NFZ2_base, uasRadius);
+NFZ3 = polybuffer(NFZ3_base, uasRadius);
+NFZ4 = polybuffer(NFZ4_base, uasRadius);
 allNFZs = [NFZ1, NFZ2, NFZ3, NFZ4];
 
 AOR    = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);
 asset1 = asset([80, 80]);
 
 % =========================================================================
-%  Pre-generate all random sensor configs and UAS departures
+%  Pre-generate all random sensor configs and UAS departures + egresses
 % =========================================================================
-fprintf('Pre-generating %d sensor configurations x %d UAS departures...\n', N, M);
+fprintf('Pre-generating %d sensor configurations x %d UAS paths...\n', N, M);
 
 sensorLocs = zeros(N, 3, 2);
 depLocs    = zeros(N, M, 2);
+egressLocs = zeros(N, M, 2);  % NEW: egress points
 
 for i = 1:N
     for s = 1:3
         sensorLocs(i, s, :) = randPosOutsideNFZs(allNFZs, MAP_W, MAP_H);
     end
     for j = 1:M
+        % Ingress point
         side = randi(4);
         switch side
             case 1; dep = [rand()*MAP_W, 0];
@@ -60,8 +69,22 @@ for i = 1:N
             case 4; dep = [MAP_W,        rand()*MAP_H];
         end
         depLocs(i, j, :) = dep;
+        
+        % Egress point (different random edge)
+        egressSide = randi(4);
+        switch egressSide
+            case 1; egr = [rand()*MAP_W, 0];
+            case 2; egr = [rand()*MAP_W, MAP_H];
+            case 3; egr = [0,            rand()*MAP_H];
+            case 4; egr = [MAP_W,        rand()*MAP_H];
+        end
+        egressLocs(i, j, :) = egr;
     end
 end
+
+% Save scenarios to file
+save('UAS_scenarios_100.mat', 'depLocs', 'egressLocs', 'sensorLocs');
+fprintf('Saved scenarios to UAS_scenarios_100.mat\n\n');
 
 % =========================================================================
 %  Parallel outer loop: sensor configurations
@@ -72,6 +95,7 @@ meanScores = zeros(N, 1);
 assetLoc   = asset1.location;
 nfzList    = allNFZs;
 aorShape   = AOR;
+pathStore = cell(N, 1);
 
 parfor i = 1:N
     loc1 = squeeze(sensorLocs(i, 1, :))';
@@ -84,10 +108,13 @@ parfor i = 1:N
     sensorArray = [s1, s2, s3];
 
     trialScores = zeros(M, 1);
+    trialPaths = cell(M, 1);  % NEW: Store actual paths
 
     for j = 1:M
         dep  = squeeze(depLocs(i, j, :))';
-        uObj = UAS(18, dep, assetLoc, 'HybridAStar', turnRadius=turnRadius);
+        egr  = squeeze(egressLocs(i, j, :))';
+        
+        uObj = UAS(18, dep, assetLoc, 'HybridAStar', turnRadius=turnRadius, egressPoint=egr);
 
         trialMap = map(MAP_H, MAP_W);
 
@@ -96,12 +123,28 @@ parfor i = 1:N
 
         res = sim.runSim();
         trialScores(j) = res.detectionScore(1);
+        trialPaths{j} = res.UASPos_all{1};  % NEW: Save full path
     end
 
     meanScores(i) = mean(trialScores);
+    pathStore{i} = trialPaths;  % NEW: Store paths for this config
 end
 
 fprintf('Done.\n');
+
+% =========================================================================
+%  Save all UAS paths to file
+% =========================================================================
+fprintf('Saving UAS path data...\n');
+allUASPaths = cell(N, M);
+for i = 1:N
+    % Note: We need to re-run to get full paths since parfor doesn't save them
+    % Or we could modify the parfor to save paths during execution
+    fprintf('  Config %d/%d\n', i, N);
+end
+% For now, paths are already stored in the .mat file via depLocs/egressLocs
+fprintf('Path coordinates saved in UAS_scenarios_100.mat\n\n');
+save('UAS_scenarios_100.mat', 'depLocs', 'egressLocs', 'sensorLocs', 'pathStore', 'meanScores');
 
 % =========================================================================
 %  Results
@@ -130,7 +173,8 @@ bSensor2 = sensor(bestLoc2, params.d50, "logistic", params, 1, 0, 360);
 bSensor3 = sensor(bestLoc3, params.d50, "logistic", params, 1, 0, 360);
 
 medDep = squeeze(depLocs(bestIdx, round(M/2), :))';
-bUAS   = UAS(18, medDep, asset1.location, 'HybridAStar', turnRadius=turnRadius);
+medEgr = squeeze(egressLocs(bestIdx, round(M/2), :))';  % NEW
+bUAS   = UAS(18, medDep, asset1.location, 'HybridAStar', turnRadius=turnRadius, egressPoint=medEgr);
 
 simBest = simulator(theMap, AOR, bUAS, [bSensor1, bSensor2, bSensor3], [asset1], ...
     tps=20, animate=true, nfzs=allNFZs, animationMultiplier=10, hideClock=false);
@@ -141,27 +185,21 @@ title(sprintf('Best Configuration  |  Mean Score: %.4f', bestScore));
 
 % =========================================================================
 %  Heat map (Figure 2) — smooth Gaussian kernel density estimate
-%
-%  For every sensor placement, its mean detection score is "smeared" across
-%  the map as a 2-D Gaussian with bandwidth sigma.  Summing all N*3
-%  contributions and dividing by the total weight at each pixel gives a
-%  smooth, continuous map of "where sensors tended to perform well".
 % =========================================================================
-sigma    = 8;          % Gaussian bandwidth in metres — tune to taste
-res      = 1;          % grid resolution in metres
+sigma    = 8;
+res      = 1;
 xVec     = 0 : res : MAP_W;
 yVec     = 0 : res : MAP_H;
 [Xg, Yg] = meshgrid(xVec, yVec);
 
-weightSum = zeros(size(Xg));   % accumulated score * kernel weight
-kernelSum = zeros(size(Xg));   % accumulated kernel weight (for normalisation)
+weightSum = zeros(size(Xg));
+kernelSum = zeros(size(Xg));
 
 for i = 1:N
     for s = 1:3
         sx = sensorLocs(i, s, 1);
         sy = sensorLocs(i, s, 2);
 
-        % 2-D Gaussian centred on this sensor location
         G = exp(-((Xg - sx).^2 + (Yg - sy).^2) / (2 * sigma^2));
 
         weightSum = weightSum + meanScores(i) .* G;
@@ -169,7 +207,6 @@ for i = 1:N
     end
 end
 
-% Normalise: weighted average score at each pixel
 heatMap = zeros(size(Xg));
 valid = kernelSum > 1e-10;
 heatMap(valid) = weightSum(valid) ./ kernelSum(valid);
