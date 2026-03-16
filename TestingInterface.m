@@ -3,7 +3,10 @@ clear
 close all
 
 % =========================================================================
-
+%  Force a process-based parallel pool.
+%  The Navigation Toolbox (Hybrid A* / DPGrid) is not supported on
+%  thread-based workers, so we must use 'Processes'.
+% =========================================================================
 existingPool = gcp('nocreate');
 if ~isempty(existingPool) && ~isa(existingPool, 'parallel.ProcessPool')
     delete(existingPool);
@@ -22,8 +25,8 @@ M          = 100;
 MAP_W      = 100;
 MAP_H      = 100;
 
-params.d50 = 15;
-params.k   = 15;
+params.d50 = 10;
+params.k   = 10;
 turnRadius = 5;
 
 % --- No-Fly Zones ---
@@ -35,7 +38,12 @@ NFZ5 = polyshape([10, 28, 26,  8],     [35, 38, 18, 15]);
 NFZ6 = polyshape([45, 65, 67, 47],     [88, 90, 75, 73]);
 allNFZs = [NFZ1, NFZ2, NFZ3, NFZ4, NFZ5, NFZ6];
 
+AOR    = polyshape([15, 85, 85, 15], [85, 85, 15, 15]);
+asset1 = asset([55, 40]);
 
+% =========================================================================
+%  Pre-generate all random sensor configs and UAS departures
+% =========================================================================
 fprintf('Pre-generating %d sensor configurations x %d UAS departures...\n', N, M);
 
 sensorLocs = zeros(N, 3, 2);
@@ -57,7 +65,9 @@ for i = 1:N
     end
 end
 
-
+% =========================================================================
+%  Parallel outer loop: sensor configurations
+% =========================================================================
 fprintf('Running %d configs x %d UAS trials on process-based pool...\n', N, M);
 
 meanScores = zeros(N, 1);
@@ -131,7 +141,14 @@ simBest.runSim();
 figure(figAnim);
 title(sprintf('Best Configuration  |  Mean Score: %.4f', bestScore));
 
-
+% =========================================================================
+%  Heat map (Figure 2) — smooth Gaussian kernel density estimate
+%
+%  For every sensor placement, its mean detection score is "smeared" across
+%  the map as a 2-D Gaussian with bandwidth sigma.  Summing all N*3
+%  contributions and dividing by the total weight at each pixel gives a
+%  smooth, continuous map of "where sensors tended to perform well".
+% =========================================================================
 sigma    = 8;          % Gaussian bandwidth in metres — tune to taste
 res      = 1;          % grid resolution in metres
 xVec     = 0 : res : MAP_W;
